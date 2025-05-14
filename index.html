@@ -58,9 +58,6 @@
       border-radius: 50%;
       margin-right: 6px;
     }
-    #controls {
-      margin-bottom: 15px;
-    }
     #board {
       display: grid;
       grid-template-columns: repeat(8, 60px);
@@ -73,8 +70,6 @@
     }
     .cell {
       position: relative;
-      width: 60px;
-      height: 60px;
       background: var(--cell-light);
       cursor: pointer;
       transition: transform var(--transition), background var(--transition);
@@ -110,16 +105,15 @@
     .cell.token-1 .token { color: #27ae60; }
     .cell.token-2 .token { color: #3498db; }
     .cell.token-3 .token { color: #f39c12; }
+    .cell.my { box-shadow: inset 0 0 0 3px #000; }
   </style>
 </head>
 <body>
-  <h1>Ocupa Casillas Online</h1>
-  <div id="status">Cargando...</div>
+  <h1>Juego de Ocupación Online</h1>
+  <div id="status">Cargando…</div>
   <div id="scores"></div>
-  <div id="controls">
-    <button id="reset">Reiniciar Juego</button>
-  </div>
   <div id="board"></div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
     import {
@@ -131,8 +125,8 @@
       get
     } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
 
-    // Firebase config
-    const firebaseConfig = {
+    // --- Firebase config ---
+    const cfg = {
       apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
       authDomain: "juego-ocupacion.firebaseapp.com",
       databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
@@ -141,160 +135,163 @@
       messagingSenderId: "567270483949",
       appId: "1:567270483949:web:7b5150bd422b5175a8e4"
     };
-    const app = initializeApp(firebaseConfig);
+    const app = initializeApp(cfg);
     const db  = getDatabase(app);
 
-    // Estado local
-    let myIdx = null;
+    // --- Local state ---
     const sessionId = localStorage.sessionId || crypto.randomUUID();
     localStorage.sessionId = sessionId;
-    const gameId = 'partida1';
-    const gameRef = ref(db, `games/${gameId}`);
+    let myIdx = null;
 
-    // Constantes juego
-    const size = 8;
-    const center = new Set(['3,3','3,4','4,3','4,4']);
-    const isPerimeter = coord => {
-      const [x,y] = coord.split(',').map(n=>+n);
+    // --- Refs ---
+    const gameId = "partida1";
+    const gref   = ref(db, `games/${gameId}`);
+
+    // --- Game constants ---
+    const SIZE   = 8;
+    const CENTER = new Set(["3,3","3,4","4,3","4,4"]);
+    const perim  = c => {
+      const [x,y] = c.split(",").map(Number);
       return x===0||x===7||y===0||y===7;
     };
 
-    // Inicializar tablero UI
-    const boardEl = document.getElementById('board');
-    for (let r=0; r<size; r++) {
-      for (let c=0; c<size; c++) {
-        const cell = document.createElement('div');
-        cell.className = 'cell ' + ((r+c)%2 ? 'dark' : '');
+    // --- Build board UI ---
+    const boardEl = document.getElementById("board");
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const cell = document.createElement("div");
+        cell.className = "cell " + ((r+c)%2 ? "dark" : "");
         cell.dataset.coord = `${r},${c}`;
         cell.onclick = () => tryMove(cell.dataset.coord);
-        boardEl.append(cell);
+        boardEl.appendChild(cell);
       }
     }
 
-    // Reset game
-    document.getElementById('reset').onclick = () => {
-      set(gameRef, {
+    // --- Reset button ---
+    document.getElementById("status").insertAdjacentHTML(
+      'afterend',
+      `<div id="controls"><button id="reset">Reiniciar juego</button></div>`
+    );
+    document.getElementById("reset").onclick = () => {
+      set(gref, {
         players: {},
         turn: 0,
-        pieces: { '0,0':0, '7,7':1, '0,7':2, '7,0':3 },
+        pieces: { "0,0": 0, "7,7": 1, "0,7": 2, "7,0": 3 },
         trails: {}
       });
     };
-    // Auto reset si no existe
-    get(gameRef).then(s=>{ if(!s.exists()) document.getElementById('reset').click(); });
 
-    // Unirse a la partida
-    runTransaction(ref(db, `games/${gameId}/players`), players=>{
+    // --- Initialize if empty ---
+    get(gref).then(snap => { if (!snap.exists()) document.getElementById("reset").click(); });
+
+    // --- Join game ---
+    runTransaction(ref(db, `games/${gameId}/players`), players => {
       players = players || {};
-      if (players[sessionId]==null && Object.keys(players).length<4) {
+      if (players[sessionId] == null && Object.keys(players).length < 4) {
         players[sessionId] = Object.keys(players).length;
       }
       return players;
     });
 
-    // Escuchar estado
-    onValue(gameRef, snap => {
-      const g = snap.val(); if(!g) return;
+    // --- Listen game state ---
+    onValue(gref, snap => {
+      const g = snap.val();
+      if (!g) return;
 
-      // Identificarme
-      if (g.players && g.players[sessionId]!=null) myIdx = g.players[sessionId];
+      // determine my index
+      if (g.players[sessionId] != null) myIdx = g.players[sessionId];
 
-      // Update status
-      const turn = g.turn;
-      document.getElementById('status').textContent =
-        `Turno del Jugador ${turn+1}` + (myIdx!=null?` · Tú: ${myIdx+1}`:'');
+      // update status & scores
+      const turn = g.turn ?? 0;
+      document.getElementById("status").textContent =
+        `Turno: Jugador ${turn+1}` + (myIdx!=null ? ` · Tú: ${myIdx+1}` : "");
 
-      // Pintar tablero
-      document.querySelectorAll('.cell').forEach(cell=>{
+      const counts = [0,0,0,0];
+      for (let t in g.trails||{}) counts[g.trails[t]]++;
+      const scoresEl = document.getElementById("scores");
+      scoresEl.innerHTML = counts.map((v,i) =>
+        `<div class="score">
+           <div class="dot" style="background:${["#e74c3c","#27ae60","#3498db","#f39c12"][i]}"></div>
+           Jugador ${i+1}: ${v}
+         </div>`
+      ).join("");
+
+      // paint cells
+      document.querySelectorAll(".cell").forEach(cell => {
         const coord = cell.dataset.coord;
-        cell.innerHTML = '';
-        cell.className = 'cell ' + ((+coord.split(',')[0]+'+'+coord.split(',')[1])%2? 'dark':'');
-        if (g.trails?.[coord]!=null) {
-          const dot = document.createElement('div');
-          dot.className = 'trail';
-          dot.style.background = getPlayerColor(g.trails[coord]) + 'cc';
-          cell.append(dot);
+        cell.className = "cell " + ((+coord.split(",")[0]+ +coord.split(",")[1])%2 ? "dark" : "");
+        // trail
+        if (g.trails?.[coord] != null) {
+          cell.classList.add(`trail-${g.trails[coord]}`);
+          const dot = document.createElement("div");
+          dot.className = "trail";
+          cell.appendChild(dot);
         }
-        if (g.pieces?.[coord]!=null) {
-          const token = document.createElement('span');
-          token.className = 'token';
-          token.textContent = '♟';
-          token.style.color = getPlayerColor(g.pieces[coord]);
-          cell.append(token);
+        // piece
+        if (g.pieces?.[coord] != null) {
           cell.classList.add(`token-${g.pieces[coord]}`);
-          if (g.pieces[coord]===myIdx) cell.classList.add('my');
+          const icon = document.createElement("span");
+          icon.className = "token";
+          icon.textContent = "♟";
+          cell.appendChild(icon);
+          if (g.pieces[coord] === myIdx) cell.classList.add("my");
         }
       });
 
-      // Mostrar puntuaciones
-      const scoresEl = document.getElementById('scores');
-      scoresEl.innerHTML = '';
-      const sc = [0,0,0,0];
-      Object.entries(g.trails||{}).forEach(([k,p])=> sc[p]++);
-      sc.forEach((v,i)=>{
-        const div = document.createElement('div'); div.className='score';
-        const dot = document.createElement('div'); dot.className='dot';
-        dot.style.background = getPlayerColor(i);
-        div.append(dot, `Jugador ${i+1}: ${v}`);
-        scoresEl.append(div);
-      });
-
-      // Fin de partida
-      const occCount = Object.keys({...g.trails,...g.pieces}).length;
-      const alive = new Set(Object.values(g.pieces||{}));
-      if (occCount>=size*size || alive.size<=1) {
-        const max = Math.max(...sc);
-        const winners = sc.map((v,i)=> v===max? i+1: null).filter(x=>x);
-        alert(winners.length>1? `Empate: ${winners.join(', ')}` : `¡Gana Jugador ${winners[0]}!`);
-        document.getElementById('reset').click();
+      // check victory
+      const occupied = new Set([...Object.keys(g.trails||{}), ...Object.keys(g.pieces||{})]);
+      const aliveSet = new Set(Object.values(g.pieces||{}));
+      if (occupied.size >= SIZE*SIZE || aliveSet.size <= 1) {
+        const max = Math.max(...counts);
+        const winners = counts.map((s,i)=>s===max?i+1:null).filter(i=>i);
+        alert(`¡${winners.length>1 ? "Empate" : "Gana"} jugador${winners.length>1?"es":""} ${winners.join(", ")}`);
+        document.getElementById("reset").click();
       }
     });
 
-    // Intentar mover
+    // --- Try move ---
     function tryMove(dest) {
-      runTransaction(gameRef, g=>{
-        if (!g || myIdx==null || g.turn!==myIdx) return;
-        const old = Object.entries(g.pieces).find(([c,p])=> p===myIdx);
-        if(!old) return;
+      runTransaction(gref, g => {
+        if (!g || myIdx==null || g.turn !== myIdx) return;
+        const old = Object.entries(g.pieces).find(([k,v])=>v===myIdx);
+        if (!old) return;
         const [o,] = old;
-        const [or,oc] = o.split(',').map(Number);
-        const [dr,dc] = dest.split(',').map(Number);
-        const adR = Math.abs(dr-or), adC = Math.abs(dc-oc);
-        const normal = (adR<=1 && adC<=1 && (adR+adC>0));
-        const teleport = center.has(o) && isPerimeter(dest);
+        const [or,oc] = o.split(",").map(Number);
+        const [dr,dc] = dest.split(",").map(Number);
+        const ddr = Math.abs(dr - or), ddc = Math.abs(dc - oc);
+        const normal = (ddr<=1 && ddc<=1 && (ddr+ddc>0));
+        const teleport = CENTER.has(o) && perim(dest);
         if (!normal && !teleport) return;
-        // deja traza
+        // leave trail
         g.trails = g.trails||{};
         g.trails[o] = myIdx;
-        // captura
-        g.pieces = g.pieces||{};
+        // capture
         if (g.pieces[dest]!=null && g.pieces[dest]!==myIdx) delete g.pieces[dest];
-        // mover
+        // move
         delete g.pieces[o];
         g.pieces[dest] = myIdx;
-        // rodeo
-        Object.entries(g.pieces).forEach(([c,p])=>{
-          const [r,c2]=c.split(',').map(Number);
-          let surrounded=true;
-          for(let rr=r-1;rr<=r+1;rr++) for(let cc=c2-1;cc<=c2+1;cc++){
-            if(rr===r&&cc===c2) continue;
-            if(rr<0||cc<0||rr>=size||cc>=size) { surrounded=false; break; }
-            const k=`${rr},${cc}`;
-            if(!((g.pieces[k]!=null)||(g.trails[k]!=null))) { surrounded=false; break; }
+        // eliminate surrounded
+        for (let [c,p] of Object.entries(g.pieces)) {
+          const [cr,cc] = c.split(",").map(Number);
+          let trapped = true;
+          for (let rr=cr-1; rr<=cr+1; rr++) {
+            for (let cc2=cc-1; cc2<=cc+1; cc2++) {
+              if (rr===cr && cc2===cc) continue;
+              if (rr<0||cc2<0||rr>=SIZE||cc2>=SIZE) { trapped=false; break; }
+              const key=`${rr},${cc2}`;
+              if (g.pieces[key]==null && g.trails[key]==null) { trapped=false; break; }
+            }
+            if (!trapped) break;
           }
-          if(surrounded) delete g.pieces[c];
-        });
-        // siguiente turno
-        let nxt=(myIdx+1)%4;
-        const aliveSet=new Set(Object.values(g.pieces));
-        while(!aliveSet.has(nxt)&&aliveSet.size>1) nxt=(nxt+1)%4;
-        g.turn=nxt;
+          if (trapped) delete g.pieces[c];
+        }
+        // next turn
+        let nxt = (myIdx+1)%4;
+        const alive = new Set(Object.values(g.pieces));
+        while (!alive.has(nxt) && alive.size>1) nxt = (nxt+1)%4;
+        g.turn = nxt;
         return g;
       });
-    }
-
-    function getPlayerColor(i) {
-      return ["#e74c3c","#27ae60","#3498db","#f39c12"][i];
     }
   </script>
 </body>
