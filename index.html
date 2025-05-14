@@ -80,7 +80,7 @@
     import { getDatabase, ref, onValue, runTransaction, set, get }
       from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
 
-    const cfg = {
+    const firebaseConfig = {
       apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
       authDomain: "juego-ocupacion.firebaseapp.com",
       databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
@@ -89,64 +89,49 @@
       messagingSenderId: "567270483949",
       appId: "1:567270483949:web:7b5150bd422b5175a8e4"
     };
-    const app = initializeApp(cfg);
-    const db = getDatabase(app);
-
-    const sessionId = localStorage.sessionId || crypto.randomUUID();
-    localStorage.sessionId = sessionId;
-
-    let selected = null;
-    const gameId = "partida1";
-    const gref = ref(db, `games/${gameId}`);
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+    const gref = ref(db, "games/partida1");
 
     const SIZE = 8;
     const CENTER = new Set(["3,3","3,4","4,3","4,4"]);
-    const perim = c => {
+    const isPerimeter = c => {
       const [x,y] = c.split(",").map(Number);
       return x===0||x===7||y===0||y===7;
     };
 
-    // Build board
+    let selected = null;
+
+    // Build board UI
     const boardEl = document.getElementById("board");
     for (let r = 0; r < SIZE; r++) {
       for (let c = 0; c < SIZE; c++) {
         const cell = document.createElement("div");
-        cell.className = `cell ${(r+c)%2?'dark':''}`;
+        cell.className = `cell ${(r+c)%2 ? "dark" : ""}`;
         cell.dataset.coord = `${r},${c}`;
-        cell.onclick = () => onCellClick(cell);
+        cell.onclick = () => handleClick(cell);
         boardEl.appendChild(cell);
       }
     }
 
-    // Initialize
-    function resetGame() {
-      set(gref, {
-        players: {},
-        turn: 0,
-        pieces: {"0,0":0,"7,7":1,"0,7":2,"7,0":3},
-        trails: {}
-      });
-    }
-    get(gref).then(snap => { if (!snap.exists()) resetGame(); });
-
-    // Join
-    runTransaction(ref(db, `games/${gameId}/players`), players => {
-      players = players || {};
-      if (players[sessionId] == null && Object.keys(players).length < 4) {
-        players[sessionId] = Object.keys(players).length;
+    // Initialize game state if missing
+    get(gref).then(snap => {
+      if (!snap.exists()) {
+        set(gref, {
+          turn: 0,
+          pieces: { "0,0":0, "7,7":1, "0,7":2, "7,0":3 },
+          trails: {}
+        });
       }
-      return players;
     });
 
-    // Listen
+    // Listen state
     onValue(gref, snap => {
       const g = snap.val();
       if (!g) return;
-
       // Status
       const turn = g.turn ?? 0;
       document.getElementById("status").textContent = `Turno: Jugador ${turn+1}`;
-
       // Scores
       const counts = [0,0,0,0];
       for (let t in g.trails||{}) counts[g.trails[t]]++;
@@ -156,98 +141,87 @@
            Jugador ${i+1}: ${v}
          </div>`
       ).join("");
-
-      // Render
+      // Render cells
       document.querySelectorAll(".cell").forEach(cell => {
         const coord = cell.dataset.coord;
-        cell.className = `cell ${(coord.split(",").reduce((a,v,i)=>a+v*(i?8:1),0)%2?'dark':'')}`;
+        cell.className = `cell ${(coord.split(",").reduce((a,v,i)=>a+v*(i?8:1),0)%2?"dark":"")}`;
         cell.classList.remove("selected","move-anim");
-
+        // trail
         if (g.trails?.[coord] != null) {
           cell.classList.add(`trail-${g.trails[coord]}`);
-          const dot = document.createElement("div");
-          dot.className = "trail";
-          cell.append(dot);
+          const dot = document.createElement("div"); dot.className="trail"; cell.append(dot);
         }
+        // piece
         if (g.pieces?.[coord] != null) {
           cell.classList.add(`token-${g.pieces[coord]}`);
-          const icon = document.createElement("span");
-          icon.className = "token";
-          icon.textContent = "♟";
+          const icon = document.createElement("span"); icon.className="token"; icon.textContent="♟";
           cell.append(icon);
         }
       });
     });
 
-    function onCellClick(cell) {
+    function handleClick(cell) {
       const coord = cell.dataset.coord;
       get(gref).then(snap => {
         const g = snap.val();
         if (!g) return;
+        const turn = g.turn ?? 0;
+        // select piece of current turn
         if (!selected) {
-          if (g.pieces?.[coord] != null) {
+          if (g.pieces[coord] === turn) {
             selected = coord;
             cell.classList.add("selected");
           }
         } else {
-          attemptMove(selected, coord);
+          // attempt move
+          movePiece(selected, coord, g);
           selected = null;
         }
       });
     }
 
-    function attemptMove(src, dest) {
-      runTransaction(gref, (g) => {
+    function movePiece(src, dest, gstate) {
+      runTransaction(gref, g => {
         if (!g) return;
         const turn = g.turn ?? 0;
-        const p = g.pieces?.[src];
-        if (p == null || p !== turn) return;
-
+        if (g.pieces[src] !== turn) return;
         const [sr,sc] = src.split(",").map(Number);
         const [dr,dc] = dest.split(",").map(Number);
-        const ddr = Math.abs(dr - sr), ddc = Math.abs(dc - sc);
+        const ddr = Math.abs(dr-sr), ddc = Math.abs(dc-sc);
         const normal = ddr<=1 && ddc<=1 && (ddr+ddc>0);
-        const teleport = CENTER.has(src) && perim(dest);
+        const teleport = CENTER.has(src) && isPerimeter(dest);
         if (!normal && !teleport) return;
-
-        // trail
-        g.trails = g.trails || {};
-        g.trails[src] = p;
-
+        // leave trail
+        g.trails = g.trails||{};
+        g.trails[src] = turn;
         // capture
-        if (g.pieces[dest] != null && g.pieces[dest] != p) {
+        if (g.pieces[dest] != null && g.pieces[dest] !== turn) {
           delete g.pieces[dest];
         }
-
         // move
         delete g.pieces[src];
-        g.pieces[dest] = p;
-
+        g.pieces[dest] = turn;
         // eliminate surrounded
         for (let [c,pi] of Object.entries(g.pieces)) {
           let trapped = true;
           const [cr,cc] = c.split(",").map(Number);
-          for (let rr = cr-1; rr <= cr+1; rr++) {
-            for (let cc2 = cc-1; cc2 <= cc+1; cc2++) {
+          for (let rr=cr-1; rr<=cr+1; rr++) {
+            for (let cc2=cc-1; cc2<=cc+1; cc2++) {
               if (rr===cr && cc2===cc) continue;
-              if (rr<0||cc2<0||rr>=SIZE||cc2>=SIZE) { trapped = false; break; }
+              if (rr<0||cc2<0||rr>=SIZE||cc2>=SIZE) { trapped=false; break; }
               const k = `${rr},${cc2}`;
-              if (!g.pieces[k] && !g.trails[k]) { trapped = false; break; }
+              if (!g.pieces[k] && !g.trails[k]) { trapped=false; break; }
             }
             if (!trapped) break;
           }
           if (trapped) delete g.pieces[c];
         }
-
         // next turn
-        let next = (turn + 1) % 4;
+        let next = (turn+1)%4;
         const alive = new Set(Object.values(g.pieces));
-        while (!alive.has(next) && alive.size > 1) {
-          next = (next + 1) % 4;
-        }
+        while (!alive.has(next) && alive.size>1) next=(next+1)%4;
         g.turn = next;
-
-        // mark moved for anim
+        // mark moved
         g._moved = dest;
         return g;
       }, (e,comm,snap) => {
@@ -255,7 +229,7 @@
           const moved = snap.val()._moved;
           const cell = document.querySelector(`[data-coord='${moved}']`);
           if (cell) cell.classList.add("move-anim");
-          // cleanup flag
+          // cleanup
           runTransaction(gref, g => { if (g) delete g._moved; return g; });
         }
       });
