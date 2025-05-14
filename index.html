@@ -152,14 +152,27 @@
     }
 
     function move(r,c) {
-      const t = tokens[currentPlayer]; const dr=Math.abs(r-t.r), dc=Math.abs(c-t.c);
-      let ok=(dr+dc===1)||(dr===1&&dc===1);
+      const t = tokens[currentPlayer];
+      const dr = Math.abs(r - t.r), dc = Math.abs(c - t.c);
+      let ok = (dr + dc === 1) || (dr === 1 && dc === 1);
       if (center.has(`${t.r},${t.c}`) && (r===0||r===7||c===0||c===7)) ok=true;
       if (!ok || !alive[currentPlayer]) return;
-      board[t.r][t.c]={type:'trail',player:currentPlayer};
-      if (board[r][c]?.type==='token') alive[board[r][c].player]=false;
-      tokens[currentPlayer]={r,c}; board[r][c]={type:'token',player:currentPlayer};
-      checkTrapped(); nextPlayer(); render(); updateScores(); updateStatus();
+
+      // No moverse a una celda ocupada por otra ficha propia
+      const target = board[r][c];
+      if (target && target.type === 'token') {
+        if (target.player === currentPlayer) return;
+        alive[target.player] = false; // eliminar jugador
+      }
+
+      board[t.r][t.c] = {type:'trail', player:currentPlayer};
+      tokens[currentPlayer] = {r, c};
+      board[r][c] = {type:'token', player:currentPlayer};
+      checkTrapped();
+      nextPlayer();
+      render();
+      updateScores();
+      updateStatus();
     }
 
     function checkTrapped() {
@@ -175,15 +188,20 @@
     }
 
     function nextPlayer() {
-      for (let i=1;i<=4;i++){
-        const p=(currentPlayer+i)%4; if (alive[p]) { currentPlayer=p; return; }
+      for (let i=1; i<=4; i++) {
+        const p = (currentPlayer + i) % 4;
+        if (alive[p]) {
+          currentPlayer = p;
+          return;
+        }
       }
     }
 
     function updateScores() {
-      const sc = [0,0,0,0]; board.flat().forEach(c=>{ if(c?.type==='trail') sc[c.player]++; });
+      const sc = [0,0,0,0];
+      board.flat().forEach(c => { if (c?.type==='trail') sc[c.player]++; });
       const S = document.getElementById('scores'); S.innerHTML='';
-      sc.forEach((v,i)=>{
+      sc.forEach((v,i) => {
         const div = document.createElement('div'); div.className='score';
         const dot=document.createElement('div'); dot.className='dot'; dot.style.background=getPlayerColor(i);
         div.append(dot,`Jugador ${i+1}: ${v}`);
@@ -192,18 +210,26 @@
     }
 
     function updateStatus() {
-      const total = board.flat().every(x=>x);
-      const aliveCount = alive.filter(x=>x).length;
+      const full = board.flat().every(c=>c);
+      const aliveCount = alive.filter(a=>a).length;
       const st = document.getElementById('status');
-      if (total || aliveCount<=1) {
-        const sc = [0,0,0,0]; board.flat().forEach(c=>{ if(c?.type==='trail') sc[c.player]++; });
-        const w = sc.indexOf(Math.max(...sc));
-        st.textContent = `Fin. Gana Jugador ${w+1}!`;
-      } else st.textContent = `Turno Jugador ${currentPlayer+1}`;
+      if (full || aliveCount <= 1) {
+        const scores = [0,0,0,0];
+        board.flat().forEach(c=>{ if(c?.type==='trail') scores[c.player]++; });
+        const max = Math.max(...scores);
+        const winners = scores.map((s,i)=>s===max?i:null).filter(i=>i!==null);
+        st.textContent = winners.length>1 ? `Empate entre jugadores ${winners.map(i=>i+1).join(', ')}` : `Ganador: Jugador ${winners[0]+1}`;
+      } else {
+        st.textContent = `Turno del Jugador ${currentPlayer+1}`;
+      }
     }
 
-    function getPlayerColor(i) { return ["#e74c3c","#27ae60","#3498db","#f39c12"][i]; }
-    function getTrailColor(i) { return getPlayerColor(i) + "cc"; }
+    function getPlayerColor(i) {
+      return ["#e74c3c","#27ae60","#3498db","#f39c12"][i];
+    }
+    function getTrailColor(i) {
+      return getPlayerColor(i) + "cc";
+    }
 
     init();
   </script>
