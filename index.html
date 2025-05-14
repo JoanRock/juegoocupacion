@@ -10,7 +10,6 @@
       --panel-bg: #2e3b4e;
       --cell-light: #e0e4e8;
       --cell-dark: #c5ccd3;
-      --accent: #f39c12;
       --font: 'Segoe UI', Tahoma, sans-serif;
       --token-size: 1.5rem;
       --trail-size: 0.6rem;
@@ -30,10 +29,10 @@
       margin-bottom: 8px;
     }
     #status {
-      background: var(--panel-bg);
       padding: 8px 16px;
       border-radius: 6px;
       margin-bottom: 12px;
+      color: #fff;
     }
     #scores {
       display: flex;
@@ -110,8 +109,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script>
-    // Configuración Firebase
-    var firebaseConfig = {
+    const firebaseConfig = {
       apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
       authDomain: "juego-ocupacion.firebaseapp.com",
       databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
@@ -123,16 +121,17 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     const gameRef = db.ref('games/partida1');
-
+    
     const SIZE = 8;
     let selected = null;
+    const colors = ['#e74c3c','#2ecc71','#3498db','#f1c40f'];
 
-    // Crear tablero en DOM
+    // Construir tablero
     const boardEl = document.getElementById('board');
-    for (let r = 0; r < SIZE; r++) {
-      for (let c = 0; c < SIZE; c++) {
+    for (let r=0; r<SIZE; r++) {
+      for (let c=0; c<SIZE; c++) {
         const cell = document.createElement('div');
-        cell.className = 'cell ' + ((r + c) % 2 ? 'dark' : '');
+        cell.className = 'cell ' + ((r+c)%2?'dark':'');
         cell.dataset.coord = `${r},${c}`;
         cell.onclick = () => handleClick(cell);
         boardEl.appendChild(cell);
@@ -142,132 +141,114 @@
     // Inicializar partida si no existe
     gameRef.once('value').then(snap => {
       if (!snap.exists()) {
-        gameRef.set({
-          turn: 0,
-          pieces: { '0,0':0, '7,7':1, '0,7':2, '7,0':3 },
-          trails: {}
-        });
+        gameRef.set({ turn:0, pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3}, trails:{} });
       }
     });
 
-    // Indicador de conexión
+    // Conexión
     const connRef = db.ref('.info/connected');
     connRef.on('value', snap => {
-      document.getElementById('status').textContent =
-        snap.val() ? 'Conectado' : 'Sin conexión';
+      const ok = snap.val();
+      const st = document.getElementById('status');
+      st.textContent = ok ? 'Conectado' : 'Sin conexión';
+      st.style.backgroundColor = ok ? '#2ecc71' : '#e74c3c';
     });
 
-    // Escuchar estado del juego
+    // Escuchar estado
     gameRef.on('value', snap => {
       const g = snap.val(); if (!g) return;
       updateUI(g);
     });
 
     function updateUI(g) {
-      // Limpiar y pintar
-      const turn = g.turn || 0;
-      document.getElementById('status').textContent = `Turno: Jugador ${turn+1}`;
-      const counts = [0,0,0,0];
-      Object.values(g.trails || {}).forEach(p => counts[p]++);
-      document.getElementById('scores').innerHTML = counts.map((v,i) =>
-        `<div class="score"><div class="dot" style="background:${['#e74c3c','#2ecc71','#3498db','#f1c40f'][i]}"></div>J${i+1}: ${v}</div>`
+      // Turno
+      const turn = g.turn||0;
+      const st = document.getElementById('status');
+      st.textContent = `Turno: Jugador ${turn+1}`;
+      st.style.backgroundColor = colors[turn];
+
+      // Puntuaciones
+      const counts=[0,0,0,0];
+      Object.values(g.trails||{}).forEach(p=>counts[p]++);
+      document.getElementById('scores').innerHTML = counts.map((v,i)=
+        `<div class="score"><div class="dot" style="background:${colors[i]}"></div>J${i+1}: ${v}</div>`
       ).join('');
 
-      document.querySelectorAll('.cell').forEach(cell => {
+      // Pintar celdas
+      document.querySelectorAll('.cell').forEach(cell=>{
         const coord = cell.dataset.coord;
-        // limpiar
         cell.innerHTML = '';
-        cell.className = 'cell ' + ((coord.split(',').reduce((a,v,i)=>a+v*(i?8:1),0)%2?'dark':''));
+        cell.className = 'cell ' + ((coord.split(',').reduce((a,v,i)=>a+v*(i?8:1),0)%2?'dark':'');
         cell.classList.remove('selected','move-anim');
-        // traza
-        if (g.trails?.[coord] != null) {
-          cell.classList.add(`trail-${g.trails[coord]}`);
-          const dot = document.createElement('div'); dot.className='trail'; cell.append(dot);
+        if (g.trails?.[coord]!=null) {
+          const p=g.trails[coord];
+          cell.classList.add(`trail-${p}`);
+          const dot=document.createElement('div'); dot.className='trail'; dot.style.backgroundColor = colors[p]; cell.append(dot);
         }
-        // ficha
-        if (g.pieces?.[coord] != null) {
-          cell.classList.add(`token-${g.pieces[coord]}`);
-          const t = document.createElement('span'); t.className='token'; t.textContent='♟'; cell.append(t);
+        if (g.pieces?.[coord]!=null) {
+          const p=g.pieces[coord];
+          cell.classList.add(`token-${p}`);
+          const t=document.createElement('span'); t.className='token'; t.textContent='♟'; t.style.color = colors[p]; cell.append(t);
         }
       });
 
-      // Comprobar fin de juego
-      const alivePlayers = new Set(Object.values(g.pieces));
-      if (alivePlayers.size <= 1) {
-        // determinar ganador por trazas
-        const traceCounts = [0,0,0,0];
+      // Fin de partida
+      const alive = new Set(Object.values(g.pieces));
+      if (alive.size<=1) {
+        const traceCounts=[0,0,0,0];
         Object.values(g.trails||{}).forEach(p=>traceCounts[p]++);
-        let max = Math.max(...traceCounts);
-        let winner = traceCounts.indexOf(max);
-        setTimeout(() => {
+        const max=Math.max(...traceCounts);
+        const winner=traceCounts.indexOf(max);
+        setTimeout(()=>{
           alert(`¡Gana el Jugador ${winner+1}!`);
-          // reiniciar partida
-          gameRef.set({
-            turn: 0,
-            pieces: { '0,0':0, '7,7':1, '0,7':2, '7,0':3 },
-            trails: {}
-          });
-        }, 100);
+          gameRef.set({ turn:0, pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3}, trails:{} });
+        },100);
       }
     }
 
     function handleClick(cell) {
-      const coord = cell.dataset.coord;
-      gameRef.once('value').then(snap => {
-        const g = snap.val();
-        const turn = g.turn || 0;
+      const src=cell.dataset.coord;
+      gameRef.once('value').then(snap=>{
+        const g=snap.val();
+        const turn=g.turn||0;
         if (!selected) {
-          if (g.pieces?.[coord] === turn) {
-            selected = coord;
-            cell.classList.add('selected');
-          }
+          if (g.pieces?.[src]===turn) { selected=src; cell.classList.add('selected'); }
         } else {
-          attemptMove(selected, coord);
-          selected = null;
+          attemptMove(selected,src);
+          selected=null;
         }
       });
     }
 
-    function attemptMove(src, dest) {
-      gameRef.transaction(g => {
+    function attemptMove(src,dest) {
+      gameRef.transaction(g=>{
         if (!g) return;
-        const turn = g.turn || 0;
-        if (g.pieces[src] !== turn) return;
+        const turn=g.turn||0;
+        if (g.pieces[src]!==turn) return;
         const [sr,sc]=src.split(',').map(Number);
         const [dr,dc]=dest.split(',').map(Number);
         const ddr=Math.abs(dr-sr), ddc=Math.abs(dc-sc);
         if (!(ddr<=1 && ddc<=1 && (ddr+ddc>0))) return;
-        g.trails=g.trails||{};
-        g.trails[src]=turn;
+        g.trails=g.trails||{}; g.trails[src]=turn;
         if (g.pieces[dest]!=null && g.pieces[dest]!=turn) delete g.pieces[dest];
         delete g.pieces[src]; g.pieces[dest]=turn;
-        // rodeo
         Object.entries({...g.pieces}).forEach(([c,p])=>{
-          let trapped=true;
-          const [r,cc]=c.split(',').map(Number);
-          for (let dr=-1; dr<=1; dr++) {
-            for (let dc=-1; dc<=1; dc++) {
-              if (dr===0 && dc===0) continue;
+          let trapped=true; const [r,cc]=c.split(',').map(Number);
+          for(let dr=-1;dr<=1;dr++){ for(let dc=-1;dc<=1;dc++){ if(dr===0&&dc===0) continue;
               const nr=r+dr, nc=cc+dc, key=`${nr},${nc}`;
-              if (nr<0||nc<0||nr>=SIZE||nc>=SIZE) { trapped=false; break; }
-              if (!(g.pieces[key]||g.trails[key])) { trapped=false; break; }
-            }
-            if (!trapped) break;
-          }
-          if (trapped) delete g.pieces[c];
+              if(nr<0||nc<0||nr>=SIZE||nc>=SIZE){trapped=false;break;}
+              if(!(g.pieces[key]||g.trails[key])){trapped=false;break;}
+            } if(!trapped) break; }
+          if(trapped) delete g.pieces[c];
         });
-        // siguiente turno
-        let next=(turn+1)%4;
-        const alive=new Set(Object.values(g.pieces));
-        while (!alive.has(next) && alive.size>1) next=(next+1)%4;
-        g.turn=next;
-        g._moved=dest;
-        return g;
-      }, (err, committed, snap) => {
-        if (committed && snap.val()?._moved) {
-          const m = snap.val()._moved;
-          const cell = document.querySelector(`[data-coord='${m}']`);
-          if (cell) cell.classList.add('move-anim');
+        let next=(turn+1)%4, alive=new Set(Object.values(g.pieces));
+        while(!alive.has(next)&&alive.size>1) next=(next+1)%4;
+        g.turn=next; g._moved=dest; return g;
+      },(e,c,snap)=>{
+        if(c&&snap.val()?._moved){
+          const m=snap.val()._moved;
+          const cell=document.querySelector(`[data-coord='${m}']`);
+          if(cell) cell.classList.add('move-anim');
           gameRef.child('_moved').remove();
         }
       });
