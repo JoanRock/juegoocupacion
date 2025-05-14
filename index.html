@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ocupa Casillas (Firebase)</title>
+  <style>
+    #board { display: grid; margin: 20px auto; }
+    .cell {
+      width: 40px;
+      height: 40px;
+      border: 1px solid #666;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Ocupa Casillas</h1>
+  <div id="status">Conectando...</div>
+  <div id="board"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-analytics.js";
+    import {
+      getDatabase,
+      ref,
+      onValue,
+      runTransaction
+    } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
+      authDomain: "juego-ocupacion.firebaseapp.com",
+      databaseURL: "https://juego-ocupacion.firebaseio.com",
+      projectId: "juego-ocupacion",
+      storageBucket: "juego-ocupacion.appspot.com",
+      messagingSenderId: "567270483949",
+      appId: "1:567270483949:web:7b5150bd422b5175a8a9e4",
+      measurementId: "G-T080WJHQ3Q"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getDatabase(app);
+
+    const BOARD_SIZE = 8;
+    const gameId = "partida1";
+    const boardRef = ref(db, `games/${gameId}/board`);
+    const turnRef  = ref(db, `games/${gameId}/turn`);
+
+    const boardEl = document.getElementById('board');
+    boardEl.style.gridTemplateColumns = `repeat(${BOARD_SIZE}, 40px)`;
+
+    for (let y = 0; y < BOARD_SIZE; y++) {
+      for (let x = 0; x < BOARD_SIZE; x++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.dataset.x = x;
+        cell.dataset.y = y;
+        cell.addEventListener('click', () => makeMove(x, y));
+        boardEl.appendChild(cell);
+      }
+    }
+
+    onValue(boardRef, snap => {
+      const board = snap.val() || {};
+      document.querySelectorAll('.cell').forEach(div => {
+        const key = `${div.dataset.x},${div.dataset.y}`;
+        div.textContent = board[key] || '';
+      });
+    });
+
+    onValue(turnRef, snap => {
+      const turn = snap.val() || 0;
+      document.getElementById('status').textContent = `Turno de: ${turn}`;
+    });
+
+    function makeMove(x, y) {
+      const key = `${x},${y}`;
+      runTransaction(boardRef, board => {
+        board = board || {};
+        if (!board[key]) {
+          board[key] = turnRef.path.pieces_.pop(); // aquí pots usar un identificador de jugador
+          return board;
+        }
+        return;
+      }).then(result => {
+        if (result.committed) {
+          runTransaction(turnRef, curr => (curr + 1) % 4);
+        }
+      });
+    }
+  </script>
+</body>
+</html>
