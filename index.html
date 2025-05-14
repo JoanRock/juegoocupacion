@@ -6,22 +6,12 @@
   <style>
     body {
       font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-      background: #f5f5f5;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 20px; background: #f5f5f5;
     }
-    h1 {
-      margin-bottom: 5px;
-    }
-    #status {
-      margin-bottom: 10px;
-      font-weight: bold;
-    }
-    #controls {
-      margin-bottom: 15px;
-    }
+    h1 { margin-bottom: 5px; }
+    #status { margin-bottom: 10px; font-weight: bold; }
+    #controls { margin-bottom: 15px; }
     #board {
       display: grid;
       grid-template-columns: repeat(8, 40px);
@@ -31,33 +21,31 @@
       border-radius: 8px;
     }
     .cell {
-      width: 40px;
-      height: 40px;
-      background: #fff;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: transform .1s;
+      width: 40px; height: 40px;
+      background: #fff; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform .1s;
     }
-    .cell:hover {
-      transform: scale(1.1);
-    }
-    .cell.player0 { background: #ff9999; }
-    .cell.player1 { background: #99ff99; }
-    .cell.player2 { background: #9999ff; }
-    .cell.player3 { background: #ffcc99; }
-    .cell.my {
-      box-shadow: inset 0 0 0 3px #333;
-    }
+    .cell:hover { transform: scale(1.1); }
+    /* Trails */
+    .trail-player0 { background: #ffdddd; }
+    .trail-player1 { background: #ddffdd; }
+    .trail-player2 { background: #ddddff; }
+    .trail-player3 { background: #ffedcc; }
+    /* Pieces */
+    .piece-player0 { background: #ff9999; }
+    .piece-player1 { background: #99ff99; }
+    .piece-player2 { background: #9999ff; }
+    .piece-player3 { background: #ffcc99; }
+    /* Your piece highlight */
+    .my { box-shadow: inset 0 0 0 3px #333; }
   </style>
 </head>
 <body>
   <h1>Ocupa Casillas</h1>
   <div id="status">Conectando…</div>
   <div id="controls">
-    <button id="reset">Reiniciar posiciones</button>
+    <button id="reset">Reiniciar juego</button>
   </div>
   <div id="board"></div>
 
@@ -68,11 +56,10 @@
       ref,
       onValue,
       runTransaction,
-      get,
       set
     } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
 
-    // Configuración de Firebase
+    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
       authDomain: "juego-ocupacion.firebaseapp.com",
@@ -82,123 +69,123 @@
       messagingSenderId: "567270483949",
       appId: "1:567270483949:web:7b5150bd422b5175a8e4"
     };
-
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
 
-    // Identificador de sesión único
+    // Unique session/player ID
     let sessionId = localStorage.getItem("sessionId");
     if (!sessionId) {
       sessionId = crypto.randomUUID();
       localStorage.setItem("sessionId", sessionId);
     }
 
-    const gameId     = "partida1";
-    const playersRef = ref(db, `games/${gameId}/players`);
-    const boardRef   = ref(db, `games/${gameId}/board`);
-
-    // Posiciones iniciales para los 4 jugadores
-    const initialPositions = [
-      "0,0",  // jugador 0
-      "7,7",  // jugador 1
-      "0,7",  // jugador 2
-      "7,0"   // jugador 3
-    ];
-
-    let myIndex = null;
-
-    // Unirse a la partida: asignar un índice 0–3
-    runTransaction(playersRef, players => {
-      players = players || {};
-      if (players[sessionId] === undefined && Object.keys(players).length < 4) {
-        players[sessionId] = Object.keys(players).length;
-        return players;
-      }
-      return players;
-    });
-
-    // Escuchar cambios en la lista de jugadores
-    onValue(playersRef, snap => {
-      const players = snap.val() || {};
-      if (players[sessionId] !== undefined) {
-        myIndex = players[sessionId];
-        document.getElementById("status").textContent = `Tu ficha: ${myIndex}`;
-        placeInitialToken();
-      } else if (Object.keys(players).length >= 4) {
-        document.getElementById("status").textContent = "Juego lleno";
-      }
-    });
-
-    // Colocar ficha inicial en la posición correspondiente
-    function placeInitialToken() {
-      const pos = initialPositions[myIndex];
-      runTransaction(boardRef, board => {
-        board = board || {};
-        if (!board[pos]) {
-          board[pos] = myIndex;
-          return board;
-        }
-        return board;
-      });
-    }
-
-    // Botón de reiniciar posiciones
-    document.getElementById("reset").addEventListener("click", () => {
-      const initBoard = {};
-      initialPositions.forEach((pos, idx) => {
-        initBoard[pos] = idx;
-      });
-      set(boardRef, initBoard);
-    });
-
-    // Dibujar el tablero
+    // Game constants
+    const gameId = "partida1";
+    const gameRef = ref(db, `games/${gameId}`);
     const BOARD_SIZE = 8;
+    const initialPositions = {
+      0: "0,0",
+      1: "7,7",
+      2: "0,7",
+      3: "7,0"
+    };
+    const central = new Set(["3,3","3,4","4,3","4,4"]);
+    const perimeter = coord => {
+      const [x,y] = coord.split(",").map(n=>+n);
+      return x===0||x===7||y===0||y===7;
+    };
+
+    // Build the board UI
     const boardEl = document.getElementById("board");
-    for (let y = 0; y < BOARD_SIZE; y++) {
-      for (let x = 0; x < BOARD_SIZE; x++) {
+    for (let y=0; y<BOARD_SIZE; y++){
+      for (let x=0; x<BOARD_SIZE; x++){
         const cell = document.createElement("div");
         cell.classList.add("cell");
-        cell.dataset.x = x;
-        cell.dataset.y = y;
-        cell.addEventListener("click", () => tryMove(x, y));
+        cell.dataset.coord = `${x},${y}`;
+        cell.addEventListener("click", () => move(cell.dataset.coord));
         boardEl.appendChild(cell);
       }
     }
 
-    // Sincronizar y repintar
-    onValue(boardRef, snap => {
-      const board = snap.val() || {};
-      document.querySelectorAll(".cell").forEach(div => {
-        const key = `${div.dataset.x},${div.dataset.y}`;
+    // Reset game to initial state
+    document.getElementById("reset").onclick = () => {
+      const pieces = {};
+      for (let pid in initialPositions) {
+        pieces[ initialPositions[pid] ] = +pid;
+      }
+      set(gameRef, {
+        turn: 0,
+        pieces,
+        trails: {}
+      });
+    };
+
+    // Listen for game state updates
+    let myPlayer = null;
+    onValue(gameRef, snap => {
+      const g = snap.val();
+      if (!g) return;
+      // On first load, determine myPlayer by matching sessionId→player index
+      if (myPlayer===null) {
+        // Infer mapping from order of initialPositions or expand with sessions as needed
+        // Here assume fixed 4 players 0–3
+        // (in prod, you'd assign session→pid separately)
+        myPlayer = Object.values(initialPositions).includes(Object.keys(g.pieces).find(c=>g.pieces[c]===0)) ? Object.keys(initialPositions).find(i=>initialPositions[i]) : 0;
+      }
+      document.getElementById("status").textContent = `Turno: ${g.turn}`;
+      // Paint cells
+      document.querySelectorAll(".cell").forEach(div=>{
         div.className = "cell";
-        if (board[key] !== undefined) {
-          div.classList.add(`player${board[key]}`);
-          if (board[key] === myIndex) div.classList.add("my");
+        const coord = div.dataset.coord;
+        if (g.trails && g.trails[coord]!=null) {
+          div.classList.add(`trail-player${g.trails[coord]}`);
+        }
+        if (g.pieces && g.pieces[coord]!=null) {
+          div.classList.add(`piece-player${g.pieces[coord]}`);
+          if (g.pieces[coord]===myPlayer) div.classList.add("my");
         }
       });
     });
 
-    // Intentar mover ficha un paso en cualquier dirección
-    function tryMove(x, y) {
-      if (myIndex === null) return;
-      const target = `${x},${y}`;
-      runTransaction(boardRef, board => {
-        board = board || {};
-        // buscar mi posición actual
-        const entry = Object.entries(board).find(([, pid]) => pid === myIndex);
-        if (!entry) return; // no has spawn
-        const [oldKey] = entry;
-        const [ox, oy] = oldKey.split(",").map(Number);
-        const dx = Math.abs(x - ox), dy = Math.abs(y - oy);
-        // mover solo si distancia ≤1, destino libre
-        if ((dx <= 1 && dy <= 1) && (dx + dy > 0) && board[target] === undefined) {
-          delete board[oldKey];
-          board[target] = myIndex;
-          return board;
+    // Attempt a move on click
+    function move(to) {
+      runTransaction(gameRef, game=>{
+        if (!game) return game;
+        const pid = game.turn;
+        // find my current position
+        const old = Object.entries(game.pieces).find(([c,p])=>p===pid);
+        if (!old) return; // shouldn't happen
+        const [oldCoord] = old;
+        const [ox,oy] = oldCoord.split(",").map(n=>+n);
+        const [tx,ty] = to.split(",").map(n=>+n);
+        const dx = Math.abs(tx-ox), dy = Math.abs(ty-oy);
+        // check allowed move: adjacent OR central→perimeter
+        const okAdj = dx<=1 && dy<=1 && (dx+dy>0);
+        const okJump = central.has(oldCoord) && perimeter(to);
+        if (!okAdj && !okJump) return;
+        // leave a trail
+        game.trails = game.trails||{};
+        game.trails[oldCoord] = pid;
+        // capture if necessary
+        game.pieces = game.pieces||{};
+        if (game.pieces[to]!=null && game.pieces[to]!==pid) {
+          // opponent piece removed
         }
-        return; // abortar
+        // move piece
+        delete game.pieces[oldCoord];
+        game.pieces[to] = pid;
+        // advance turn
+        game.turn = (pid+1)%4;
+        return game;
       });
     }
+
+    // On load, do an initial reset if no game exists
+    setTimeout(()=>{
+      getDatabase(app).ref(`games/${gameId}/turn`).get().then(s=>{
+        if (!s.exists()) document.getElementById("reset").click();
+      });
+    }, 500);
   </script>
 </body>
 </html>
