@@ -17,19 +17,17 @@
     }
     * { box-sizing: border-box; }
     body {
-      margin: 0;
+      margin: 0; padding: 20px;
       background: var(--bg-page);
       color: #fff;
       font-family: var(--font);
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px;
     }
     h1 {
-      margin-bottom: 8px;
       font-size: 2rem;
-      letter-spacing: 1px;
+      margin-bottom: 8px;
     }
     #status {
       background: var(--panel-bg);
@@ -44,7 +42,7 @@
     }
     .score {
       background: var(--panel-bg);
-      padding: 4px 8px;
+      padding: 6px 10px;
       border-radius: 4px;
       display: flex;
       align-items: center;
@@ -52,8 +50,7 @@
       font-size: 0.9rem;
     }
     .dot {
-      width: 12px;
-      height: 12px;
+      width: 12px; height: 12px;
       border-radius: 50%;
     }
     #board {
@@ -71,16 +68,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.2s;
       border-radius: 4px;
+      transition: transform 0.2s;
     }
-    .cell:hover { transform: scale(1.05); }
     .cell.dark { background: var(--cell-dark); }
+    .cell:hover { transform: scale(1.05); }
     .cell.selected { outline: 2px solid var(--accent); }
-    .cell.move-anim {
-      animation: flash 0.4s ease-out;
-    }
-    @keyframes flash {
+    .cell.move-anim { animation: highlight 0.4s ease-out; }
+    @keyframes highlight {
       from { background: var(--accent); }
       to { background: var(--cell-light); }
     }
@@ -107,7 +102,7 @@
 </head>
 <body>
   <h1>Ocupa Casillas Online</h1>
-  <div id="status">Conectando a Firebase...</div>
+  <div id="status">Conectando…</div>
   <div id="scores"></div>
   <div id="board"></div>
 
@@ -116,7 +111,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script>
     // Configuración Firebase
-    var cfg = {
+    var firebaseConfig = {
       apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
       authDomain: "juego-ocupacion.firebaseapp.com",
       databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
@@ -125,112 +120,154 @@
       messagingSenderId: "567270483949",
       appId: "1:567270483949:web:7b5150bd422b5175a8e4"
     };
-    firebase.initializeApp(cfg);
+    firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     const gameRef = db.ref('games/partida1');
 
     const SIZE = 8;
     let selected = null;
 
-    // Construir tablero
+    // Crear tablero en DOM
     const boardEl = document.getElementById('board');
-    for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) {
-      const cell = document.createElement('div');
-      cell.className = 'cell '+((r+c)%2?'dark':'');
-      cell.dataset.coord = `${r},${c}`;
-      cell.onclick = ()=>onCellClick(cell);
-      boardEl.appendChild(cell);
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell ' + ((r + c) % 2 ? 'dark' : '');
+        cell.dataset.coord = `${r},${c}`;
+        cell.onclick = () => handleClick(cell);
+        boardEl.appendChild(cell);
+      }
     }
 
-    // Inicializar partida si falta
-    gameRef.once('value').then(snap=>{
-      if(!snap.exists()) {
-        gameRef.set({ turn:0, pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3}, trails:{} });
+    // Inicializar partida si no existe
+    gameRef.once('value').then(snap => {
+      if (!snap.exists()) {
+        gameRef.set({
+          turn: 0,
+          pieces: { '0,0':0, '7,7':1, '0,7':2, '7,0':3 },
+          trails: {}
+        });
       }
     });
 
-    // Conexión RTDB
+    // Indicador de conexión
     const connRef = db.ref('.info/connected');
-    connRef.on('value', snap=>{
-      const ok = snap.val();
-      document.getElementById('status').textContent = ok ? 'Conectado' : 'Sin conexión';
+    connRef.on('value', snap => {
+      document.getElementById('status').textContent =
+        snap.val() ? 'Conectado' : 'Sin conexión';
     });
 
-    // Escuchar cambios de juego
-    gameRef.on('value', snap=>{
-      const g = snap.val();
-      if(!g) return;
+    // Escuchar estado del juego
+    gameRef.on('value', snap => {
+      const g = snap.val(); if (!g) return;
       updateUI(g);
     });
 
     function updateUI(g) {
-      // Estado
-      const turn = g.turn||0;
+      // Limpiar y pintar
+      const turn = g.turn || 0;
       document.getElementById('status').textContent = `Turno: Jugador ${turn+1}`;
-      // Puntuaciones
-      const counts=[0,0,0,0];
-      Object.values(g.trails||{}).forEach(p=>counts[p]++);
-      document.getElementById('scores').innerHTML = counts.map((v,i)=>
+      const counts = [0,0,0,0];
+      Object.values(g.trails || {}).forEach(p => counts[p]++);
+      document.getElementById('scores').innerHTML = counts.map((v,i) =>
         `<div class="score"><div class="dot" style="background:${['#e74c3c','#2ecc71','#3498db','#f1c40f'][i]}"></div>J${i+1}: ${v}</div>`
       ).join('');
-      // Render celdas
-      document.querySelectorAll('.cell').forEach(cell=>{
-        const coord=cell.dataset.coord;
-        cell.className='cell '+((coord.split(',').reduce((a,v,i)=>a+v*(i?8:1),0)%2?'dark':''));
-        cell.innerHTML=''; cell.classList.remove('selected','move-anim');
-        if(g.trails?.[coord]!=null) {
+
+      document.querySelectorAll('.cell').forEach(cell => {
+        const coord = cell.dataset.coord;
+        // limpiar
+        cell.innerHTML = '';
+        cell.className = 'cell ' + ((coord.split(',').reduce((a,v,i)=>a+v*(i?8:1),0)%2?'dark':''));
+        cell.classList.remove('selected','move-anim');
+        // traza
+        if (g.trails?.[coord] != null) {
           cell.classList.add(`trail-${g.trails[coord]}`);
-          const d = document.createElement('div'); d.className='trail'; cell.append(d);
+          const dot = document.createElement('div'); dot.className='trail'; cell.append(dot);
         }
-        if(g.pieces?.[coord]!=null) {
+        // ficha
+        if (g.pieces?.[coord] != null) {
           cell.classList.add(`token-${g.pieces[coord]}`);
           const t = document.createElement('span'); t.className='token'; t.textContent='♟'; cell.append(t);
         }
       });
+
+      // Comprobar fin de juego
+      const alivePlayers = new Set(Object.values(g.pieces));
+      if (alivePlayers.size <= 1) {
+        // determinar ganador por trazas
+        const traceCounts = [0,0,0,0];
+        Object.values(g.trails||{}).forEach(p=>traceCounts[p]++);
+        let max = Math.max(...traceCounts);
+        let winner = traceCounts.indexOf(max);
+        setTimeout(() => {
+          alert(`¡Gana el Jugador ${winner+1}!`);
+          // reiniciar partida
+          gameRef.set({
+            turn: 0,
+            pieces: { '0,0':0, '7,7':1, '0,7':2, '7,0':3 },
+            trails: {}
+          });
+        }, 100);
+      }
     }
 
-    function onCellClick(cell) {
-      const src = cell.dataset.coord;
-      gameRef.once('value').then(snap=>{
-        const g = snap.val(); const turn=g.turn||0;
-        if(!selected) {
-          if(g.pieces?.[src]===turn) { selected=src; cell.classList.add('selected'); }
+    function handleClick(cell) {
+      const coord = cell.dataset.coord;
+      gameRef.once('value').then(snap => {
+        const g = snap.val();
+        const turn = g.turn || 0;
+        if (!selected) {
+          if (g.pieces?.[coord] === turn) {
+            selected = coord;
+            cell.classList.add('selected');
+          }
         } else {
-          attemptMove(selected,src);
-          selected=null;
+          attemptMove(selected, coord);
+          selected = null;
         }
       });
     }
 
-    function attemptMove(src,dest) {
-      gameRef.transaction(g=>{
-        if(!g) return;
-        const turn=g.turn||0;
-        if(g.pieces[src]!==turn) return;
+    function attemptMove(src, dest) {
+      gameRef.transaction(g => {
+        if (!g) return;
+        const turn = g.turn || 0;
+        if (g.pieces[src] !== turn) return;
         const [sr,sc]=src.split(',').map(Number);
         const [dr,dc]=dest.split(',').map(Number);
         const ddr=Math.abs(dr-sr), ddc=Math.abs(dc-sc);
-        if(!(ddr<=1&&ddc<=1&&(ddr+ddc>0))) return;
-        g.trails=g.trails||{}; g.trails[src]=turn;
-        if(g.pieces[dest]!=null&&g.pieces[dest]!=turn) delete g.pieces[dest];
+        if (!(ddr<=1 && ddc<=1 && (ddr+ddc>0))) return;
+        g.trails=g.trails||{};
+        g.trails[src]=turn;
+        if (g.pieces[dest]!=null && g.pieces[dest]!=turn) delete g.pieces[dest];
         delete g.pieces[src]; g.pieces[dest]=turn;
-        // elimina rodeados
+        // rodeo
         Object.entries({...g.pieces}).forEach(([c,p])=>{
-          let trapped=true; const [r,cc]=c.split(',').map(Number);
-          for(let dr=-1;dr<=1;dr++){ for(let dc=-1;dc<=1;dc++){ if(dr===0&&dc===0) continue;
-              const nr=r+dr,nc=cc+dc,key=`${nr},${nc}`;
-              if(nr<0||nc<0||nr>=SIZE||nc>=SIZE){trapped=false;break;}               if(!(g.pieces[key]||g.trails[key])){trapped=false;break;}
-            } if(!trapped) break; }
-          if(trapped) delete g.pieces[c];
+          let trapped=true;
+          const [r,cc]=c.split(',').map(Number);
+          for (let dr=-1; dr<=1; dr++) {
+            for (let dc=-1; dc<=1; dc++) {
+              if (dr===0 && dc===0) continue;
+              const nr=r+dr, nc=cc+dc, key=`${nr},${nc}`;
+              if (nr<0||nc<0||nr>=SIZE||nc>=SIZE) { trapped=false; break; }
+              if (!(g.pieces[key]||g.trails[key])) { trapped=false; break; }
+            }
+            if (!trapped) break;
+          }
+          if (trapped) delete g.pieces[c];
         });
-        let next=(turn+1)%4, alive=new Set(Object.values(g.pieces));
-        while(!alive.has(next)&&alive.size>1) next=(next+1)%4;
-        g.turn=next; g._moved=dest; return g;
-      },(e,c,snap)=>{
-        if(c&&snap.val()?._moved){
-          const m=snap.val()._moved;
-          const cell=document.querySelector(`[data-coord='${m}']`);
-          if(cell) cell.classList.add('move-anim');
+        // siguiente turno
+        let next=(turn+1)%4;
+        const alive=new Set(Object.values(g.pieces));
+        while (!alive.has(next) && alive.size>1) next=(next+1)%4;
+        g.turn=next;
+        g._moved=dest;
+        return g;
+      }, (err, committed, snap) => {
+        if (committed && snap.val()?._moved) {
+          const m = snap.val()._moved;
+          const cell = document.querySelector(`[data-coord='${m}']`);
+          if (cell) cell.classList.add('move-anim');
           gameRef.child('_moved').remove();
         }
       });
