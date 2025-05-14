@@ -1,97 +1,245 @@
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
-  import {
-    getDatabase,
-    ref,
-    onValue,
-    runTransaction,
-    get,
-    set
-  } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Juego de Ocupación Online - Debug</title>
+  <style>
+    :root {
+      --bg: #2c3e50;
+      --board-bg: #ecf0f1;
+      --light: #ffffff;
+      --dark: #bdc3c7;
+      --highlight: #f1c40f;
+      --shadow: rgba(0,0,0,0.2);
+      --token-size: 200%;
+      --trail-size: 20%;
+      --move-color: #f39c12;
+      --transition: 0.3s;
+      --font: 'Montserrat', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      display: flex; flex-direction: column; align-items: center;
+      background: var(--bg); color: #fff;
+      font-family: var(--font); padding: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+      font-size: 2.5rem;
+      text-shadow: 2px 2px 4px var(--shadow);
+    }
+    #status, #scores {
+      background: var(--board-bg); color: #2c3e50;
+      padding: 8px 16px; border-radius: 8px;
+      box-shadow: 0 2px 4px var(--shadow); margin: 8px;
+    }
+    #scores { display: flex; gap: 12px; }
+    .score {
+      display: flex; align-items: center; font-weight: bold;
+      background: var(--board-bg); color: #2c3e50;
+      padding: 4px 8px; border-radius: 4px;
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 4px; }
+    #board {
+      display: grid;
+      grid-template: repeat(8, 60px) / repeat(8, 60px);
+      gap: 4px;
+      background: var(--board-bg);
+      padding: 8px; border-radius: 8px;
+      box-shadow: 0 4px 8px var(--shadow);
+    }
+    .cell {
+      background: var(--light);
+      position: relative; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background var(--transition);
+      border-radius: 4px;
+    }
+    .cell.dark { background: var(--dark); }
+    .cell.selected { outline: 3px solid var(--highlight); }
+    .cell.move-anim { animation: flash 0.5s; }
+    @keyframes flash {
+      from { background-color: var(--move-color); }
+      to   { background-color: var(--light); }
+    }
+    .trail {
+      position: absolute;
+      width: var(--trail-size);
+      height: var(--trail-size);
+      border-radius: 50%; opacity: 0.9;
+    }
+    .token {
+      font-size: var(--token-size); line-height: 1;
+    }
+    .cell.trail-0 .trail { background: rgba(231,76,60,0.8); }
+    .cell.trail-1 .trail { background: rgba(39,174,96,0.8); }
+    .cell.trail-2 .trail { background: rgba(52,152,219,0.8); }
+    .cell.trail-3 .trail { background: rgba(243,156,18,0.8); }
+    .cell.token-0 .token { color: #e74c3c; }
+    .cell.token-1 .token { color: #27ae60; }
+    .cell.token-2 .token { color: #3498db; }
+    .cell.token-3 .token { color: #f39c12; }
+  </style>
+</head>
+<body>
+  <h1>Juego de Ocupación Online - Debug</h1>
+  <div id="status">Inicializando...</div>
+  <div id="scores"></div>
+  <div id="board"></div>
 
-  // 1) Configuración Firebase
-  const firebaseConfig = {
-    apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
-    authDomain: "juego-ocupacion.firebaseapp.com",
-    databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "juego-ocupacion",
-    storageBucket: "juego-ocupacion.appspot.com",
-    messagingSenderId: "567270483949",
-    appId: "1:567270483949:web:7b5150bd422b5175a8e4"
-  };
-  const app = initializeApp(firebaseConfig);
-  const db  = getDatabase(app);
-  console.log("Firebase inicializado", app);
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
+    import {
+      getDatabase, ref, onValue,
+      runTransaction, get, set
+    } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
 
-  // 2) Chequeo de conexión RTDB
-  const connRef = ref(db, ".info/connected");
-  onValue(connRef, snap => {
-    console.log("RTDB conectado?", snap.val());
-    document.getElementById("status").textContent =
-      snap.val() ? "🔌 Conectado a Firebase" : "❌ Desconectado";
-  });
+    // 1) Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
+      authDomain: "juego-ocupacion.firebaseapp.com",
+      databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "juego-ocupacion",
+      storageBucket: "juego-ocupacion.appspot.com",
+      messagingSenderId: "567270483949",
+      appId: "1:567270483949:web:7b5150bd422b5175a8e4"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    console.log("Firebase inicializado: ", app.options.projectId);
 
-  // 3) Referencia al juego
-  const gameRef = ref(db, "games/partida1");
+    // 2) Check RTDB connection
+    const connRef = ref(db, ".info/connected");
+    onValue(connRef, snap => {
+      console.log("RTDB conectado?", snap.val());
+      document.getElementById("status").textContent = snap.val()
+        ? "🔌 Conectado a Firebase"
+        : "❌ Desconectado de Firebase";
+    });
 
-  // 4) Inicializar partida si no existe
-  get(gameRef).then(snap => {
-    if (!snap.exists()) {
-      console.log("Inicializando partida en RTDB");
-      return set(gameRef, {
-        turn: 0,
-        pieces: { "0,0":0, "7,7":1, "0,7":2, "7,0":3 },
-        trails: {}
+    // 3) Punto de entrada de juego
+    const gameRef = ref(db, "games/partida1");
+
+    // 4) Inicializar si no existe
+    get(gameRef).then(snap => {
+      if (!snap.exists()) {
+        console.log("Inicializando partida...");
+        return set(gameRef, {
+          turn: 0,
+          pieces: { "0,0":0, "7,7":1, "0,7":2, "7,0":3 },
+          trails: {}
+        });
+      }
+      console.log("Partida ya existente");
+    }).catch(e => console.error("Error init:", e));
+
+    // 5) Construir tablero en DOM
+    const SIZE = 8;
+    const boardEl = document.getElementById("board");
+    console.log("Board element:", boardEl);
+    for (let r=0; r<SIZE; r++) {
+      for (let c=0; c<SIZE; c++) {
+        const cell = document.createElement("div");
+        cell.className = "cell " + ((r+c)%2?"dark":"");
+        cell.dataset.coord = `${r},${c}`;
+        cell.onclick = ()=> onCellClick(cell);
+        boardEl.appendChild(cell);
+      }
+    }
+    console.log("Tablero creado con 64 celdas");
+
+    // 6) Escuchar estado de juego
+    onValue(gameRef, snap => {
+      const g = snap.val();
+      console.log("Estado recibido:", g);
+      if (!g) return;
+      updateUI(g);
+    }, err => console.error("onValue error:", err));
+
+    function updateUI(g) {
+      // estado y puntuaciones
+      const turn = g.turn||0;
+      document.getElementById("status").textContent = `Turno: Jugador ${turn+1}`;
+      const counts=[0,0,0,0];
+      for (let k in g.trails||{}) counts[g.trails[k]]++;
+      document.getElementById("scores").innerHTML = counts.map((v,i)=>
+        `<div class="score"><div class="dot" style="background:${["#e74c3c","#27ae60","#3498db","#f39c12"][i]}"></div>J${i+1}: ${v}</div>`
+      ).join("");
+      // render celdas
+      document.querySelectorAll(".cell").forEach(cell => {
+        const coord=cell.dataset.coord;
+        cell.className=`cell ${coord.split(",").reduce((a,v,i)=>a+v*(i?8:1),0)%2?"dark":""}`;
+        cell.classList.remove("selected","move-anim");
+        if (g.trails?.[coord]!=null) {
+          cell.classList.add(`trail-${g.trails[coord]}`);
+          const dot=document.createElement("div"); dot.className="trail"; cell.append(dot);
+        }
+        if (g.pieces?.[coord]!=null) {
+          cell.classList.add(`token-${g.pieces[coord]}`);
+          const icon=document.createElement("span"); icon.className="token"; icon.textContent="♟";
+          cell.append(icon);
+        }
       });
     }
-  }).catch(e => console.error("Error al inicializar:", e));
 
-  // 5) Construir tablero en el DOM
-  const SIZE = 8;
-  const boardEl = document.getElementById("board");
-  console.log("Board element:", boardEl);
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      const cell = document.createElement("div");
-      cell.className = "cell " + ((r+c)%2 ? "dark" : "");
-      cell.dataset.coord = `${r},${c}`;
-      cell.onclick = () => onCellClick(cell);
-      boardEl.appendChild(cell);
+    function onCellClick(cell) {
+      const src=cell.dataset.coord;
+      console.log("Click en:", src);
+      get(gameRef).then(snap=>{
+        const g=snap.val(); console.log("Estado al click:", g);
+        const turn=g.turn||0;
+        if (!selected) {
+          if (g.pieces?.[src]===turn) {
+            selected=src; cell.classList.add("selected");
+          }
+        } else {
+          attemptMove(selected, src);
+          selected=null;
+        }
+      });
     }
-  }
-  console.log("Tablero construido");
 
-  // 6) Escuchar estado del juego
-  onValue(gameRef, snap => {
-    const g = snap.val();
-    console.log("Recibido estado:", g);
-    if (!g) return;
-    // Actualizar interfaz (trazas, fichas, scores, etc.)
-    // ... aquí pones tu lógica de render() ...
-  }, e => {
-    console.error("Error onValue:", e);
-  });
-
-  // 7) Lógica de movimiento
-  function onCellClick(cell) {
-    const src = cell.dataset.coord;
-    console.log("Click en celda:", src);
-    get(gameRef).then(snap => {
-      const g = snap.val();
-      console.log("Estado al click:", g);
-      // ... aquí tu lógica de selección y moveTransaction ...
-    });
-  }
-
-  function attemptMove(src, dest) {
-    console.log(`Intentando mover de ${src} a ${dest}`);
-    runTransaction(gameRef, g => {
-      // ... tu lógica de transacción ...
-      return g;
-    }, (err,comm,snap) => {
-      if (err) console.error("Transacción error:", err);
-      else if (!comm) console.warn("Transacción no completada");
-      else console.log("Movimiento registrado");
-    });
-  }
-</script>
+    let selected=null;
+    function attemptMove(src,dest) {
+      console.log(`Intentando mover ${src}→${dest}`);
+      runTransaction(gameRef, g=>{
+        if(!g) return;
+        const turn=g.turn||0;
+        if (g.pieces[src]!==turn) return;
+        const [sr,sc]=src.split(",").map(Number);
+        const [dr,dc]=dest.split(",").map(Number);
+        const ddr=Math.abs(dr-sr), ddc=Math.abs(dc-sc);
+        if (!(ddr<=1 && ddc<=1 && (ddr+ddc>0))) return;
+        g.trails=g.trails||{}; g.trails[src]=turn;
+        if(g.pieces[dest]!=null&&g.pieces[dest]!=turn) delete g.pieces[dest];
+        delete g.pieces[src]; g.pieces[dest]=turn;
+        // elimina rodeados
+        Object.entries({...g.pieces}).forEach(([c,p])=>{
+          let trapped=true; const [cr,cc]=c.split(",").map(Number);
+          for(let rr=cr-1;rr<=cr+1;rr++){
+            for(let cc2=cc-1;cc2<=cc+1;cc2++){
+              if(rr===cr&&cc2===cc) continue;
+              if(rr<0||cc2<0||rr>=SIZE||cc2>=SIZE){trapped=false;break;}
+              const k=`${rr},${cc2}`;
+              if(!(g.pieces[k]||g.trails[k])){trapped=false;break;}
+            }
+            if(!trapped) break;
+          }
+          if(trapped) delete g.pieces[c];
+        });
+        let next=(turn+1)%4; const alive=new Set(Object.values(g.pieces));
+        while(!alive.has(next)&&alive.size>1) next=(next+1)%4;
+        g.turn=next; g._moved=dest; return g;
+      },(e,c,snap)=>{
+        if(c&&snap.val()?._moved){
+          console.log("Movimiento guardado", snap.val()._moved);
+          const cell=document.querySelector(`[data-coord='${snap.val()._moved}']`);
+          if(cell) cell.classList.add("move-anim");
+          runTransaction(gameRef,g=>{if(g)delete g._moved;return g;});
+        }
+      });
+    }
+  </script>
+</body>
+</html>
