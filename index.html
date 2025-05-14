@@ -12,6 +12,9 @@
     }
     h1 { margin-bottom: 5px; }
     #status { margin-bottom: 15px; font-weight: bold; }
+    #controls {
+      margin-bottom: 15px;
+    }
     #board {
       display: grid;
       grid-template-columns: repeat(8, 40px);
@@ -27,13 +30,16 @@
       cursor: pointer; transition: transform .1s;
     }
     .cell:hover { transform: scale(1.1); }
-    .cell.my   { background: #333; }
-    .cell.other{ background: #aaa; }
+    .cell.my    { background: #333; }
+    .cell.other { background: #aaa; }
   </style>
 </head>
 <body>
   <h1>Ocupa Casillas</h1>
   <div id="status">Conectando…</div>
+  <div id="controls">
+    <button id="reset">Reiniciar tablero</button>
+  </div>
   <div id="board"></div>
 
   <script type="module">
@@ -59,7 +65,7 @@
     const app = initializeApp(config);
     const db  = getDatabase(app);
 
-    // 1) Generar o recuperar sessionId
+    // Identificador único de esta sesión
     let myId = localStorage.getItem("sessionId");
     if (!myId) {
       myId = crypto.randomUUID();
@@ -70,12 +76,17 @@
     const gameId   = "partida1";
     const boardRef = ref(db, `games/${gameId}/board`);
 
-    // 2) Inicializar si no existe
+    // Inicializa si no existe
     get(boardRef).then(snap => {
       if (!snap.exists()) set(boardRef, {});
     });
 
-    // 3) Dibujar tablero
+    // Botón reiniciar
+    document.getElementById("reset").addEventListener("click", () => {
+      set(boardRef, {});
+    });
+
+    // Dibujar tablero
     const BOARD = 8;
     const boardEl = document.getElementById("board");
     for (let y = 0; y < BOARD; y++) {
@@ -89,7 +100,7 @@
       }
     }
 
-    // 4) Escuchar cambios y repintar
+    // Sincronizar y repintar
     onValue(boardRef, snap => {
       const b = snap.val() || {};
       document.querySelectorAll(".cell").forEach(div => {
@@ -101,29 +112,26 @@
       });
     });
 
-    // 5) Lógica de movimiento: spawn o mover 1 casilla
+    // Lógica de movimiento: spawn o mover 1 casilla
     function makeMove(x, y) {
       const target = `${x},${y}`;
       runTransaction(boardRef, board => {
         board = board || {};
-        // ¿Ya tengo ficha?
         const pos = Object.entries(board).find(([,pid]) => pid === myId);
         if (!pos) {
-          // spawn: si libre, coloco
           if (!board[target]) board[target] = myId;
           return board;
         } else {
-          // mover: solo 1 casilla en cualquier dir, y si destino libre
           const [oldKey] = pos;
           const [ox, oy] = oldKey.split(",").map(Number);
           const dx = Math.abs(x - ox), dy = Math.abs(y - oy);
-          if ((dx<=1 && dy<=1) && (dx+dy>0) && !board[target]) {
+          if ((dx <= 1 && dy <= 1) && (dx + dy > 0) && !board[target]) {
             delete board[oldKey];
             board[target] = myId;
             return board;
           }
         }
-        return; // aborta si no puede
+        return; // aborta
       });
     }
   </script>
