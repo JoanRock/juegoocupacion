@@ -1,254 +1,211 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <title>Ocupa Casillas – 4 Jugadores</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Juego de Ocupación</title>
   <style>
-    body {
-      font-family: sans-serif;
-      background: #fafafa;
-      display: flex; flex-direction: column;
-      align-items: center; padding: 20px;
+    :root {
+      --bg-page: #2c3e50;
+      --board-bg: #ecf0f1;
+      --cell-light: #ffffff;
+      --cell-dark: #bdc3c7;
+      --highlight: #f1c40f;
+      --players: #e74c3c, #27ae60, #3498db, #f39c12;
+      --shadow: rgba(0,0,0,0.2);
+      --token-size: 70%;
+      --dot-size: 20%;
+      --transition: 0.2s;
+      --font: 'Montserrat', sans-serif;
     }
-    h1 { margin: 10px 0; }
-    #status { margin-bottom: 10px; font-weight: bold; }
-    #controls { margin-bottom: 15px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: var(--bg-page);
+      font-family: var(--font);
+      color: #fff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px var(--shadow);
+    }
+    #status, #scores {
+      background: var(--board-bg);
+      color: #2c3e50;
+      padding: 12px 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px var(--shadow);
+      margin: 10px;
+      width: fit-content;
+    }
+    #scores {
+      display: flex;
+      gap: 15px;
+    }
+    .score {
+      display: flex;
+      align-items: center;
+      font-weight: bold;
+    }
+    .score .dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
     #board {
       display: grid;
-      grid-template-columns: repeat(8, 50px);
-      gap: 2px;
-      background: #333;
-      padding: 2px;
-      border-radius: 8px;
+      grid-template-columns: repeat(8, 60px);
+      grid-template-rows: repeat(8, 60px);
+      gap: 4px;
+      background: var(--board-bg);
+      padding: 12px;
+      border-radius: 16px;
+      box-shadow: 0 6px 12px var(--shadow);
     }
     .cell {
-      width: 50px; height: 50px;
-      background: #fff; border-radius: 4px;
+      position: relative;
+      width: 60px;
+      height: 60px;
+      background: var(--cell-light);
       cursor: pointer;
-      transition: transform .1s;
+      transition: transform var(--transition), background var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
     }
-    .cell:hover { transform: scale(1.05); }
-    /* Trails */
-    .trail-0 { background: #ffdddd; }
-    .trail-1 { background: #ddffdd; }
-    .trail-2 { background: #ddddff; }
-    .trail-3 { background: #fff0cc; }
-    /* Pieces */
-    .piece-0 { background: #ff6666; }
-    .piece-1 { background: #66ff66; }
-    .piece-2 { background: #6666ff; }
-    .piece-3 { background: #ffb266; }
-    .my { box-shadow: inset 0 0 0 3px #000; }
+    .cell.dark { background: var(--cell-dark); }
+    .cell:hover { transform: scale(1.05); background: var(--highlight); }
+    .trail {
+      position: absolute;
+      width: var(--dot-size);
+      height: var(--dot-size);
+      border-radius: 50%;
+      opacity: 0.9;
+    }
+    .token {
+      font-size: var(--token-size);
+      transition: transform var(--transition);
+    }
+    .cell.token-0 .token:hover,
+    .cell.token-1 .token:hover,
+    .cell.token-2 .token:hover,
+    .cell.token-3 .token:hover {
+      transform: scale(1.2);
+    }
+    .cell.trail-0 .trail { background: rgba(231, 76, 60, 0.8); }
+    .cell.trail-1 .trail { background: rgba(39, 174, 96, 0.8); }
+    .cell.trail-2 .trail { background: rgba(52, 152, 219, 0.8); }
+    .cell.trail-3 .trail { background: rgba(243, 156, 18, 0.8); }
+    .cell.token-0 .token { color: #e74c3c; }
+    .cell.token-1 .token { color: #27ae60; }
+    .cell.token-2 .token { color: #3498db; }
+    .cell.token-3 .token { color: #f39c12; }
   </style>
 </head>
 <body>
-  <h1>Ocupa Casillas</h1>
-  <div id="status">Conectando…</div>
-  <div id="controls">
-    <button id="reset">Reiniciar juego</button>
-  </div>
+  <h1>Juego de Ocupación</h1>
+  <div id="status">Cargando...</div>
+  <div id="scores"></div>
   <div id="board"></div>
+  <script>
+    const size = 8;
+    const center = new Set(["3,3","3,4","4,3","4,4"]);
+    let board = [], tokens = [], currentPlayer = 0, alive = [true, true, true, true];
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
-    import {
-      getDatabase,
-      ref,
-      onValue,
-      runTransaction,
-      set,
-      get,
-      child
-    } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
-
-    // --- Configuración Firebase ---
-    const firebaseConfig = {
-      apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
-      authDomain: "juego-ocupacion.firebaseapp.com",
-      databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "juego-ocupacion",
-      storageBucket: "juego-ocupacion.appspot.com",
-      messagingSenderId: "567270483949",
-      appId: "1:567270483949:web:7b5150bd422b5175a8e4"
-    };
-    const app = initializeApp(firebaseConfig);
-    const db  = getDatabase(app);
-
-    // --- Estado local ---
-    let myIdx = null;
-    const sessionId = localStorage.sessionId || crypto.randomUUID();
-    localStorage.sessionId = sessionId;
-
-    // --- Referencias RTDB ---
-    const gameId     = "partida1";
-    const gameRef    = ref(db, `games/${gameId}`);
-    const playersRef = child(gameRef, "players");
-    const turnRef    = child(gameRef, "turn");
-    const piecesRef  = child(gameRef, "pieces");
-    const trailsRef  = child(gameRef, "trails");
-
-    // --- Constantes de juego ---
-    const BOARD_SIZE = 8;
-    const CENTER     = new Set(["3,3","3,4","4,3","4,4"]);
-    const onPerimeter = c => {
-      const [x,y] = c.split(",").map(n=>+n);
-      return x===0||x===7||y===0||y===7;
-    };
-
-    // --- Construir UI del tablero ---
-    const boardEl = document.getElementById("board");
-    for (let y = 0; y < BOARD_SIZE; y++) {
-      for (let x = 0; x < BOARD_SIZE; x++) {
-        const cell = document.createElement("div");
-        cell.className = "cell";
-        cell.dataset.coord = `${x},${y}`;
-        cell.onclick = () => tryMove(cell.dataset.coord);
-        boardEl.appendChild(cell);
-      }
+    function init() {
+      board = Array(size).fill().map(() => Array(size).fill(null));
+      tokens = [{r:0,c:0},{r:0,c:7},{r:7,c:7},{r:7,c:0}];
+      tokens.forEach((t,i) => board[t.r][t.c] = {type:'token',player:i});
+      render(); updateScores(); updateStatus();
     }
 
-    // --- Función de reinicio ---
-    document.getElementById("reset").onclick = () => {
-      set(gameRef, {
-        players: {},
-        turn: 0,
-        // piezas en las 4 esquinas
-        pieces: {
-          "0,0": 0,
-          "7,7": 1,
-          "0,7": 2,
-          "7,0": 3
-        },
-        trails: {}
-      });
-    };
-
-    // --- Inicializar al cargar si no existe partida ---
-    get(gameRef).then(snap => {
-      if (!snap.exists()) document.getElementById("reset").click();
-    });
-
-    // --- Unirse a la partida (transactional) ---
-    runTransaction(playersRef, players => {
-      players = players || {};
-      if (players[sessionId] == null && Object.keys(players).length < 4) {
-        players[sessionId] = Object.keys(players).length;
-      }
-      return players;
-    });
-
-    // --- Escuchar actualizaciones del juego ---
-    onValue(gameRef, snap => {
-      const game = snap.val();
-      if (!game) return;
-
-      // Mi índice de jugador
-      if (game.players[sessionId] != null) {
-        myIdx = game.players[sessionId];
-      }
-
-      // Estado de turno
-      const turn = game.turn ?? 0;
-      document.getElementById("status").textContent =
-        `Turno ▶ Jugador ${turn}` + (myIdx!=null?` · Tú: ${myIdx}` : "");
-
-      // Pintar celdas
-      document.querySelectorAll(".cell").forEach(c => {
-        c.className = "cell";
-        const coord = c.dataset.coord;
-
-        // traza
-        if (game.trails?.[coord] != null) {
-          c.classList.add(`trail-${game.trails[coord]}`);
-        }
-        // pieza
-        if (game.pieces?.[coord] != null) {
-          const p = game.pieces[coord];
-          c.classList.add(`piece-${p}`);
-          if (p === myIdx) c.classList.add("my");
-        }
-      });
-
-      // Chequeo victoria
-      const occCount = Object.keys({
-        ...game.trails,
-        ...game.pieces
-      }).length;
-      const alive = new Set(Object.values(game.pieces || {}));
-      if (occCount >= BOARD_SIZE*BOARD_SIZE || alive.size <= 1) {
-        // contar trazas
-        const counts = [0,0,0,0];
-        for (let t in game.trails) counts[game.trails[t]]++;
-        const winner = counts.indexOf(Math.max(...counts));
-        alert(`🎉 ¡Gana Jugador ${winner}!`);
-        document.getElementById("reset").click();
-      }
-    });
-
-    // --- Intentar mover ---
-    function tryMove(dest) {
-      runTransaction(gameRef, game => {
-        if (!game || myIdx == null || game.turn !== myIdx) return;
-
-        // posición actual
-        const oldEntry = Object.entries(game.pieces).find(([,p]) => p === myIdx);
-        if (!oldEntry) return;
-        const oldCoord = oldEntry[0];
-        const [ox,oy] = oldCoord.split(",").map(n=>+n);
-        const [dx,dy] = dest.split(",").map(n=>+n).map((v,i)=> i? v-oy : v-ox);
-        const adx = Math.abs(dx), ady = Math.abs(dy);
-
-        // validar movimiento
-        const normal = (adx<=1 && ady<=1 && (adx+ady>0));
-        const teleport = (CENTER.has(oldCoord) && onPerimeter(dest));
-        if (!normal && !teleport) return;
-
-        // dejar traza
-        game.trails = game.trails||{};
-        game.trails[oldCoord] = myIdx;
-
-        // captura de pieza enemiga
-        game.pieces = game.pieces||{};
-        if (game.pieces[dest] != null && game.pieces[dest] !== myIdx) {
-          delete game.pieces[dest];
-        }
-
-        // mover pieza
-        delete game.pieces[oldCoord];
-        game.pieces[dest] = myIdx;
-
-        // eliminar jugadores rodeados
-        for (let [coord,p] of Object.entries(game.pieces)) {
-          const [cx,cy] = coord.split(",").map(n=>+n);
-          let surrounded = true;
-          for (let ix = cx-1; ix <= cx+1; ix++) {
-            for (let iy = cy-1; iy <= cy+1; iy++) {
-              if (ix===cx && iy===cy) continue;
-              if (ix<0||iy<0||ix>=BOARD_SIZE||iy>=BOARD_SIZE) {
-                surrounded = false;
-                break;
-              }
-              const k = `${ix},${iy}`;
-              if (game.pieces[k] == null && game.trails[k] == null) {
-                surrounded = false;
-                break;
-              }
-            }
-            if (!surrounded) break;
+    function render() {
+      const B = document.getElementById('board'); B.innerHTML = '';
+      for (let r=0; r<size; r++) for (let c=0; c<size; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell ' + ((r+c)%2? 'dark':'');
+        const item = board[r][c];
+        if (item) {
+          if (item.type==='trail') {
+            const dot = document.createElement('div');
+            dot.className = 'trail';
+            dot.style.background = getTrailColor(item.player);
+            cell.append(dot);
           }
-          if (surrounded) delete game.pieces[coord];
+          if (item.type==='token') {
+            const icon = document.createElement('span');
+            icon.className = 'token'; icon.textContent='♟';
+            icon.style.color = getPlayerColor(item.player);
+            cell.append(icon);
+          }
         }
+        cell.addEventListener('click', ()=>move(r,c));
+        B.append(cell);
+      }
+    }
 
-        // turno siguiente (skipping eliminados)
-        let next = (myIdx + 1) % 4;
-        const alive = new Set(Object.values(game.pieces));
-        while (!alive.has(next) && alive.size>1) {
-          next = (next + 1) % 4;
-        }
-        game.turn = next;
-        return game;
+    function move(r,c) {
+      const t = tokens[currentPlayer]; const dr=Math.abs(r-t.r), dc=Math.abs(c-t.c);
+      let ok=(dr+dc===1)||(dr===1&&dc===1);
+      if (center.has(`${t.r},${t.c}`) && (r===0||r===7||c===0||c===7)) ok=true;
+      if (!ok || !alive[currentPlayer]) return;
+      board[t.r][t.c]={type:'trail',player:currentPlayer};
+      if (board[r][c]?.type==='token') alive[board[r][c].player]=false;
+      tokens[currentPlayer]={r,c}; board[r][c]={type:'token',player:currentPlayer};
+      checkTrapped(); nextPlayer(); render(); updateScores(); updateStatus();
+    }
+
+    function checkTrapped() {
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      tokens.forEach((t,i)=>{
+        if (!alive[i]) return;
+        const trapped = dirs.every(([dr,dc])=>{
+          const nr=t.r+dr,nc=t.c+dc;
+          if(nr<0||nr>=size||nc<0||nc>=size) return false;
+          const n=board[nr][nc]; return n && ((n.type==='trail'&&n.player===i)||n.type==='token');
+        }); if (trapped) alive[i]=false;
       });
     }
+
+    function nextPlayer() {
+      for (let i=1;i<=4;i++){
+        const p=(currentPlayer+i)%4; if (alive[p]) { currentPlayer=p; return; }
+      }
+    }
+
+    function updateScores() {
+      const sc = [0,0,0,0]; board.flat().forEach(c=>{ if(c?.type==='trail') sc[c.player]++; });
+      const S = document.getElementById('scores'); S.innerHTML='';
+      sc.forEach((v,i)=>{
+        const div = document.createElement('div'); div.className='score';
+        const dot=document.createElement('div'); dot.className='dot'; dot.style.background=getPlayerColor(i);
+        div.append(dot,`Jugador ${i+1}: ${v}`);
+        S.append(div);
+      });
+    }
+
+    function updateStatus() {
+      const total = board.flat().every(x=>x);
+      const aliveCount = alive.filter(x=>x).length;
+      const st = document.getElementById('status');
+      if (total || aliveCount<=1) {
+        const sc = [0,0,0,0]; board.flat().forEach(c=>{ if(c?.type==='trail') sc[c.player]++; });
+        const w = sc.indexOf(Math.max(...sc));
+        st.textContent = `Fin. Gana Jugador ${w+1}!`;
+      } else st.textContent = `Turno Jugador ${currentPlayer+1}`;
+    }
+
+    function getPlayerColor(i) { return ["#e74c3c","#27ae60","#3498db","#f39c12"][i]; }
+    function getTrailColor(i) { return getPlayerColor(i) + "cc"; }
+
+    init();
   </script>
 </body>
 </html>
