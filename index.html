@@ -1,12 +1,17 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Ocupa Casillas</title>
   <style>
-    body { font-family: sans-serif; display: flex; flex-direction: column;
-           align-items: center; padding: 20px; background: #f5f5f5; }
-    #status { margin-bottom: 10px; font-weight: bold; }
+    body {
+      font-family: sans-serif;
+      display: flex; flex-direction: column;
+      align-items: center; padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 { margin-bottom: 5px; }
+    #status { margin-bottom: 15px; font-weight: bold; }
     #board {
       display: grid;
       grid-template-columns: repeat(8, 40px);
@@ -19,21 +24,18 @@
       width: 40px; height: 40px;
       background: #fff; border-radius: 4px;
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer;
-      transition: transform .1s;
+      cursor: pointer; transition: transform .1s;
     }
     .cell:hover { transform: scale(1.1); }
-    .player0 { background: #ff9999; }
-    .player1 { background: #99ff99; }
-    .player2 { background: #9999ff; }
-    .player3 { background: #ffcc99; }
-    .current-turn { box-shadow: inset 0 0 0 3px #333; }
+    .cell.my   { background: #333; }
+    .cell.other{ background: #aaa; }
   </style>
 </head>
 <body>
   <h1>Ocupa Casillas</h1>
-  <div id="status">Conectando...</div>
+  <div id="status">Conectando…</div>
   <div id="board"></div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
     import {
@@ -45,69 +47,83 @@
       set
     } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
+    const config = {
+      apiKey: "...",
       authDomain: "juego-ocupacion.firebaseapp.com",
       databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
       projectId: "juego-ocupacion",
       storageBucket: "juego-ocupacion.appspot.com",
       messagingSenderId: "567270483949",
       appId: "1:567270483949:web:7b5150bd422b5175a8a9e4",
-      measurementId: "G-T080WJHQ3Q"
     };
+    const app = initializeApp(config);
+    const db  = getDatabase(app);
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const connRef = ref(db, ".info/connected");
-    onValue(connRef, s => console.log(
-      s.val() ? "✅ Conectado a RTDB" : "❌ Desconectado de RTDB"
-    ));
+    // 1) Generar o recuperar sessionId
+    let myId = localStorage.getItem("sessionId");
+    if (!myId) {
+      myId = crypto.randomUUID();
+      localStorage.setItem("sessionId", myId);
+    }
+    document.getElementById("status").textContent = `Tu ficha: ${myId}`;
 
-    const BOARD_SIZE = 8;
-    const gameId = "partida1";
+    const gameId   = "partida1";
     const boardRef = ref(db, `games/${gameId}/board`);
-    const turnRef  = ref(db, `games/${gameId}/turn`);
-    get(turnRef).then(s => { if (!s.exists()) set(turnRef, 0) });
-    get(boardRef).then(s => { if (!s.exists()) set(boardRef, {}) });
 
-    let currentTurn = 0;
+    // 2) Inicializar si no existe
+    get(boardRef).then(snap => {
+      if (!snap.exists()) set(boardRef, {});
+    });
+
+    // 3) Dibujar tablero
+    const BOARD = 8;
     const boardEl = document.getElementById("board");
-    for (let y = 0; y < BOARD_SIZE; y++) {
-      for (let x = 0; x < BOARD_SIZE; x++) {
+    for (let y = 0; y < BOARD; y++) {
+      for (let x = 0; x < BOARD; x++) {
         const c = document.createElement("div");
         c.classList.add("cell");
-        c.dataset.x = x; c.dataset.y = y;
+        c.dataset.x = x;
+        c.dataset.y = y;
         c.addEventListener("click", () => makeMove(x, y));
         boardEl.appendChild(c);
       }
     }
 
+    // 4) Escuchar cambios y repintar
     onValue(boardRef, snap => {
       const b = snap.val() || {};
       document.querySelectorAll(".cell").forEach(div => {
         const key = `${div.dataset.x},${div.dataset.y}`;
-        const pid = b[key];
         div.className = "cell";
-        if (pid != null) div.classList.add(`player${pid}`);
-        if (pid === currentTurn) div.classList.add("current-turn");
+        if (b[key]) {
+          div.classList.add(b[key] === myId ? "my" : "other");
+        }
       });
     });
 
-    onValue(turnRef, snap => {
-      currentTurn = snap.val() || 0;
-      document.getElementById("status").textContent = `Turno de: ${currentTurn}`;
-    });
-
+    // 5) Lógica de movimiento: spawn o mover 1 casilla
     function makeMove(x, y) {
-      const key = `${x},${y}`;
+      const target = `${x},${y}`;
       runTransaction(boardRef, board => {
         board = board || {};
-        if (!board[key]) {
-          board[key] = currentTurn;
+        // ¿Ya tengo ficha?
+        const pos = Object.entries(board).find(([,pid]) => pid === myId);
+        if (!pos) {
+          // spawn: si libre, coloco
+          if (!board[target]) board[target] = myId;
           return board;
+        } else {
+          // mover: solo 1 casilla en cualquier dir, y si destino libre
+          const [oldKey] = pos;
+          const [ox, oy] = oldKey.split(",").map(Number);
+          const dx = Math.abs(x - ox), dy = Math.abs(y - oy);
+          if ((dx<=1 && dy<=1) && (dx+dy>0) && !board[target]) {
+            delete board[oldKey];
+            board[target] = myId;
+            return board;
+          }
         }
-      }).then(res => {
-        if (res.committed) runTransaction(turnRef, t => (t + 1) % 4);
+        return; // aborta si no puede
       });
     }
   </script>
