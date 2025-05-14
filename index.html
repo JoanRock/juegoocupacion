@@ -2,143 +2,254 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Juego de Ocupación Simplificado</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Juego de Ocupación Online</title>
   <style>
-    body { display: flex; flex-direction: column; align-items: center; font-family: sans-serif; background: #f0f0f0; margin:0; padding:20px; }
-    h1 { margin-bottom:10px; }
-    #status { margin-bottom:10px; font-weight:bold; }
-    #board { display: grid; grid-template: repeat(8, 60px) / repeat(8, 60px); gap:2px; }
-    .cell { background: #fff; border:1px solid #999; display:flex; justify-content:center; align-items:center; cursor:pointer; position:relative; }
-    .cell.dark { background: #ddd; }
-    .trail { position:absolute; width:20px; height:20px; border-radius:50%; opacity:0.6; }
-    .token { font-size:32px; line-height:1; }
-    .trail-0 { background:rgba(255,0,0,0.6); }
-    .trail-1 { background:rgba(0,128,0,0.6); }
-    .trail-2 { background:rgba(0,0,255,0.6); }
-    .trail-3 { background:rgba(255,165,0,0.6); }
-    .token-0 { color:#f00; }
-    .token-1 { color:#080; }
-    .token-2 { color:#00f; }
-    .token-3 { color:#fa0; }
-    #scores { display: flex; gap:15px; margin-top:10px; }
-    .score { display:flex; align-items:center; gap:4px; }
+    :root {
+      --bg: #2c3e50;
+      --board-bg: #ecf0f1;
+      --light: #ffffff;
+      --dark: #bdc3c7;
+      --highlight: #f1c40f;
+      --shadow: rgba(0,0,0,0.2);
+      --token-size: 200%;
+      --trail-size: 20%;
+      --move-color: #f39c12;
+      --transition: 0.3s;
+      --font: 'Montserrat', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      display: flex; flex-direction: column; align-items: center;
+      background: var(--bg); color: #fff;
+      font-family: var(--font); padding: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+      font-size: 2.5rem;
+      text-shadow: 2px 2px 4px var(--shadow);
+    }
+    #status, #scores {
+      background: var(--board-bg); color: #2c3e50;
+      padding: 8px 16px; border-radius: 8px;
+      box-shadow: 0 2px 4px var(--shadow); margin: 8px;
+    }
+    #scores { display: flex; gap: 12px; }
+    .score {
+      display: flex; align-items: center; font-weight: bold;
+      background: var(--board-bg); color: #2c3e50;
+      padding: 4px 8px; border-radius: 4px;
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 4px; }
+    #board {
+      display: grid;
+      grid-template: repeat(8, 60px) / repeat(8, 60px);
+      gap: 4px;
+      background: var(--board-bg);
+      padding: 8px; border-radius: 8px;
+      box-shadow: 0 4px 8px var(--shadow);
+    }
+    .cell {
+      background: var(--light);
+      position: relative; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background var(--transition);
+      border-radius: 4px;
+    }
+    .cell.dark { background: var(--dark); }
+    .cell.selected { outline: 3px solid var(--highlight); }
+    .cell.move-anim { animation: flash 0.5s; }
+    @keyframes flash {
+      from { background-color: var(--move-color); }
+      to { background-color: var(--light); }
+    }
+    .trail {
+      position: absolute;
+      width: var(--trail-size);
+      height: var(--trail-size);
+      border-radius: 50%;
+      opacity: 0.9;
+    }
+    .token {
+      font-size: var(--token-size);
+      line-height: 1;
+    }
+    .cell.trail-0 .trail { background: rgba(231,76,60,0.8); }
+    .cell.trail-1 .trail { background: rgba(39,174,96,0.8); }
+    .cell.trail-2 .trail { background: rgba(52,152,219,0.8); }
+    .cell.trail-3 .trail { background: rgba(243,156,18,0.8); }
+    .cell.token-0 .token { color: #e74c3c; }
+    .cell.token-1 .token { color: #27ae60; }
+    .cell.token-2 .token { color: #3498db; }
+    .cell.token-3 .token { color: #f39c12; }
   </style>
 </head>
 <body>
-  <h1>Juego de Ocupación</h1>
-  <div id="status">Turno: Jugador 1</div>
-  <div id="board"></div>
+  <h1>Juego de Ocupación Online</h1>
+  <div id="status">Cargando…</div>
   <div id="scores"></div>
+  <div id="board"></div>
 
-  <script>
-    const SIZE=8;
-    const boardEl=document.getElementById('board');
-    const statusEl=document.getElementById('status');
-    const scoresEl=document.getElementById('scores');
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
+    import {
+      getDatabase, ref, onValue,
+      runTransaction, get, set
+    } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
 
-    // Estado
-    let turn=0;
-    const pieces={ '0,0':0, '7,7':1, '0,7':2, '7,0':3 };
-    const trails={};
+    // Configura tu Firebase aquí
+    const firebaseConfig = {
+      apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
+      authDomain: "juego-ocupacion.firebaseapp.com",
+      databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "juego-ocupacion",
+      storageBucket: "juego-ocupacion.appspot.com",
+      messagingSenderId: "567270483949",
+      appId: "1:567270483949:web:7b5150bd422b5175a8e4"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+    const gameRef = ref(db, "games/partida1");
 
-    let selected=null;
+    const SIZE = 8;
+    let selected = null;
 
-    // Inicializar tablero
-    for(let r=0;r<SIZE;r++){
-      for(let c=0;c<SIZE;c++){
-        const cell=document.createElement('div');
-        cell.className='cell '+((r+c)%2?'dark':'');
-        cell.dataset.coord=`${r},${c}`;
-        cell.addEventListener('click',()=>onClick(cell));
+    // Construir tablero
+    const boardEl = document.getElementById("board");
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const cell = document.createElement("div");
+        cell.classList.add("cell", (r+c)%2 ? "dark" : "");
+        cell.dataset.coord = `${r},${c}`;
+        cell.onclick = () => onCellClick(cell);
         boardEl.appendChild(cell);
       }
     }
 
-    function render(){
-      // Limpia
-      document.querySelectorAll('.cell').forEach(cell=>{
-        cell.innerHTML='';
-        cell.classList.remove('selected');
+    // Inicializar partida si no existe
+    (async () => {
+      const snap = await get(gameRef);
+      if (!snap.exists()) {
+        await set(gameRef, {
+          turn: 0,
+          pieces: { "0,0":0, "7,7":1, "0,7":2, "7,0":3 },
+          trails: {}
+        });
+      }
+    })();
+
+    // Escuchar actualizaciones
+    onValue(gameRef, snap => {
+      const g = snap.val();
+      if (!g) return;
+
+      // Estado y puntuaciones
+      const turn = g.turn || 0;
+      document.getElementById("status").textContent = `Turno: Jugador ${turn+1}`;
+
+      const counts = [0,0,0,0];
+      Object.values(g.trails || {}).forEach(p => counts[p]++);
+      document.getElementById("scores").innerHTML = counts.map((v,i) =>
+        `<div class="score">
+           <div class="dot" style="background:${["#e74c3c","#27ae60","#3498db","#f39c12"][i]}"></div>
+           J${i+1}: ${v}
+         </div>`
+      ).join("");
+
+      // Renderizar celdas
+      document.querySelectorAll(".cell").forEach(cell => {
+        const coord = cell.dataset.coord;
+        cell.className = `cell ${((coord.split(",").reduce((a,v,i)=>(a+v*(i?8:1)),0)%2)?"dark":"")}`;
+        cell.classList.remove("selected","move-anim");
+
+        if (g.trails?.[coord] != null) {
+          cell.classList.add(`trail-${g.trails[coord]}`);
+          const dot = document.createElement("div");
+          dot.className = "trail";
+          cell.appendChild(dot);
+        }
+        if (g.pieces?.[coord] != null) {
+          cell.classList.add(`token-${g.pieces[coord]}`);
+          const icon = document.createElement("span");
+          icon.className = "token";
+          icon.textContent = "♟";
+          cell.appendChild(icon);
+        }
       });
-      // Dibuja trazas
-      for(const k in trails){
-        const cell=document.querySelector(`[data-coord='${k}']`);
-        if(!cell) continue;
-        const dot=document.createElement('div');
-        dot.className='trail trail-'+trails[k];
-        cell.appendChild(dot);
-      }
-      // Dibuja fichas
-      for(const k in pieces){
-        const cell=document.querySelector(`[data-coord='${k}']`);
-        if(!cell) continue;
-        const span=document.createElement('span');
-        span.className='token token-'+pieces[k];
-        span.textContent='♟';
-        cell.appendChild(span);
-      }
-      // Actualiza estado
-      statusEl.textContent=`Turno: Jugador ${turn+1}`;
-      // Puntajes
-      const counts=[0,0,0,0];
-      for(const k in trails) counts[trails[k]]++;
-      scoresEl.innerHTML = counts.map((v,i)=>
-        `<div class="score"><div class="dot" style="background:${['#f00','#080','#00f','#fa0'][i]}"></div>J${i+1}: ${v}</div>`
-      ).join('');
-    }
+    });
 
-    function onClick(cell){
-      const coord=cell.dataset.coord;
-      if(selected===null){
-        // seleccionar ficha propia
-        if(pieces[coord]===turn){
-          selected=coord;
-          cell.classList.add('selected');
-        }
-      } else {
-        // mover
-        const [sr,sc]=selected.split(',').map(Number);
-        const [dr,dc]=coord.split(',').map(Number);
-        const dR=Math.abs(dr-sr), dC=Math.abs(dc-sc);
-        if((dR<=1&&dC<=1&&(dR+dC>0))){
-          // deja traza
-          trails[selected]=turn;
-          // captura
-          if(pieces[coord]!=null&&pieces[coord]!==turn) delete pieces[coord];
-          // mueve
-          delete pieces[selected];
-          pieces[coord]=turn;
-          // elimina rodeados
-          eliminate();
-          // siguiente turno
-          turn=(turn+1)%4;
-        }
-        selected=null;
-      }
-      render();
-    }
-
-    function eliminate(){
-      for(const k in {...pieces}){
-        const [r,c]=k.split(',').map(Number);
-        let surrounded=true;
-        for(let dr=-1;dr<=1;dr++){
-          for(let dc=-1;dc<=1;dc++){
-            if(dr===0&&dc===0) continue;
-            const nr=r+dr, nc=c+dc;
-            const key=`${nr},${nc}`;
-            if(nr<0||nc<0||nr>=SIZE||nc>=SIZE){ surrounded=false; break; }
-            if(!(pieces[key]!=null||trails[key]!=null)){ surrounded=false; break; }
+    function onCellClick(cell) {
+      const src = cell.dataset.coord;
+      get(gameRef).then(snap => {
+        const g = snap.val();
+        if (!g) return;
+        const turn = g.turn || 0;
+        if (selected === null) {
+          // seleccionar solo la ficha del turno actual
+          if (g.pieces?.[src] === turn) {
+            selected = src;
+            cell.classList.add("selected");
           }
-          if(!surrounded) break;
+        } else {
+          attemptMove(selected, src);
+          selected = null;
         }
-        if(surrounded) delete pieces[k];
-      }
+      });
     }
 
-    // Inicia
-    render();
+    function attemptMove(src, dest) {
+      runTransaction(gameRef, g => {
+        if (!g) return;
+        const turn = g.turn || 0;
+        if (g.pieces[src] !== turn) return;
+        const [sr,sc] = src.split(",").map(Number);
+        const [dr,dc] = dest.split(",").map(Number);
+        const ddr = Math.abs(dr-sr), ddc = Math.abs(dc-sc);
+        // Movimiento solo a adyacentes
+        if (!(ddr<=1 && ddc<=1 && (ddr+ddc>0))) return;
+        // dejar traza
+        g.trails = g.trails || {};
+        g.trails[src] = turn;
+        // captura si hay rival
+        if (g.pieces[dest] != null && g.pieces[dest] !== turn) {
+          delete g.pieces[dest];
+        }
+        // mover ficha
+        delete g.pieces[src];
+        g.pieces[dest] = turn;
+        // eliminar rodeados
+        Object.entries({...g.pieces}).forEach(([c,p])=>{
+          let trapped = true;
+          const [r,cx] = c.split(",").map(Number);
+          for (let dr=-1; dr<=1; dr++){
+            for (let dc=-1; dc<=1; dc++){
+              if (dr===0 && dc===0) continue;
+              const nr=r+dr, nc=cx+dc, key=`${nr},${nc}`;
+              if (nr<0||nc<0||nr>=SIZE||nc>=SIZE){ trapped=false; break; }
+              if (!(g.pieces[key]||g.trails[key])){ trapped=false; break; }
+            }
+            if (!trapped) break;
+          }
+          if (trapped) delete g.pieces[c];
+        });
+        // siguiente turno saltando eliminados
+        let next = (turn+1)%4;
+        const alive = new Set(Object.values(g.pieces));
+        while (!alive.has(next) && alive.size>1) next=(next+1)%4;
+        g.turn = next;
+        // marca para animación
+        g._moved = dest;
+        return g;
+      }, (error, committed, snap) => {
+        if (committed && snap.val()?._moved) {
+          const m = snap.val()._moved;
+          const cell = document.querySelector(`[data-coord='${m}']`);
+          if (cell) cell.classList.add("move-anim");
+          // limpiar marca
+          runTransaction(gameRef, g => { if (g) delete g._moved; return g; });
+        }
+      });
+    }
   </script>
 </body>
 </html>
