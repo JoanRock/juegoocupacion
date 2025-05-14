@@ -1,76 +1,48 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <title>Ocupa Casillas (Firebase)</title>
+  <meta charset="UTF-8">
+  <title>Ocupa Casillas</title>
   <style>
-    body {
-      font-family: sans-serif;
-      background: #f5f5f5;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-    }
-
-    h1 {
-      margin-bottom: 10px;
-    }
-
-    #status {
-      margin-bottom: 20px;
-      font-weight: bold;
-    }
-
+    body { font-family: sans-serif; display: flex; flex-direction: column;
+           align-items: center; padding: 20px; background: #f5f5f5; }
+    #status { margin-bottom: 10px; font-weight: bold; }
     #board {
       display: grid;
-      grid-gap: 2px;
+      grid-template-columns: repeat(8, 40px);
+      gap: 2px;
       background: #444;
       padding: 2px;
       border-radius: 8px;
     }
-
     .cell {
-      width: 40px;
-      height: 40px;
-      background: #fff;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 40px; height: 40px;
+      background: #fff; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
       cursor: pointer;
-      transition: transform 0.1s, background 0.2s;
+      transition: transform .1s;
     }
-    .cell:hover {
-      transform: scale(1.1);
-    }
-
-    .cell.empty {
-      background: #fff;
-    }
-    .cell.player0 { background: #ff9999; }
-    .cell.player1 { background: #99ff99; }
-    .cell.player2 { background: #9999ff; }
-    .cell.player3 { background: #ffcc99; }
-
-    .cell.current-turn {
-      box-shadow: inset 0 0 0 3px #333;
-    }
+    .cell:hover { transform: scale(1.1); }
+    .player0 { background: #ff9999; }
+    .player1 { background: #99ff99; }
+    .player2 { background: #9999ff; }
+    .player3 { background: #ffcc99; }
+    .current-turn { box-shadow: inset 0 0 0 3px #333; }
   </style>
 </head>
 <body>
   <h1>Ocupa Casillas</h1>
   <div id="status">Conectando...</div>
   <div id="board"></div>
-
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
-    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-analytics.js";
     import {
       getDatabase,
       ref,
       onValue,
-      runTransaction
+      runTransaction,
+      get,
+      set
     } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
 
     const firebaseConfig = {
@@ -85,53 +57,45 @@
     };
 
     const app = initializeApp(firebaseConfig);
-    const analytics = getAnalytics(app);
     const db = getDatabase(app);
+    const connRef = ref(db, ".info/connected");
+    onValue(connRef, s => console.log(
+      s.val() ? "✅ Conectado a RTDB" : "❌ Desconectado de RTDB"
+    ));
 
     const BOARD_SIZE = 8;
     const gameId = "partida1";
     const boardRef = ref(db, `games/${gameId}/board`);
     const turnRef  = ref(db, `games/${gameId}/turn`);
-
-    runTransaction(turnRef, curr => (curr === null ? 0 : curr));
-    runTransaction(boardRef, board => (board === null ? {} : board));
+    get(turnRef).then(s => { if (!s.exists()) set(turnRef, 0) });
+    get(boardRef).then(s => { if (!s.exists()) set(boardRef, {}) });
 
     let currentTurn = 0;
-    const boardEl = document.getElementById('board');
-    boardEl.style.gridTemplateColumns = `repeat(${BOARD_SIZE}, 40px)`;
-
+    const boardEl = document.getElementById("board");
     for (let y = 0; y < BOARD_SIZE; y++) {
       for (let x = 0; x < BOARD_SIZE; x++) {
-        const cell = document.createElement('div');
-        cell.classList.add('cell', 'empty');
-        cell.dataset.x = x;
-        cell.dataset.y = y;
-        cell.addEventListener('click', () => makeMove(x, y));
-        boardEl.appendChild(cell);
+        const c = document.createElement("div");
+        c.classList.add("cell");
+        c.dataset.x = x; c.dataset.y = y;
+        c.addEventListener("click", () => makeMove(x, y));
+        boardEl.appendChild(c);
       }
     }
 
     onValue(boardRef, snap => {
-      const board = snap.val() || {};
-      document.querySelectorAll('.cell').forEach(div => {
+      const b = snap.val() || {};
+      document.querySelectorAll(".cell").forEach(div => {
         const key = `${div.dataset.x},${div.dataset.y}`;
-        const pid = board[key];
-        div.className = 'cell empty';
-        if (pid !== undefined) {
-          div.classList.add(`player${pid}`);
-        }
-        if (pid === currentTurn) {
-          div.classList.add('current-turn');
-        }
+        const pid = b[key];
+        div.className = "cell";
+        if (pid != null) div.classList.add(`player${pid}`);
+        if (pid === currentTurn) div.classList.add("current-turn");
       });
     });
 
     onValue(turnRef, snap => {
-      const turn = snap.val() || 0;
-      currentTurn = turn;
-      document.getElementById('status').textContent = `Turno de: ${turn}`;
-      // Re-pinta per destacar el torn
-      onValue(boardRef, b => {});
+      currentTurn = snap.val() || 0;
+      document.getElementById("status").textContent = `Turno de: ${currentTurn}`;
     });
 
     function makeMove(x, y) {
@@ -142,11 +106,8 @@
           board[key] = currentTurn;
           return board;
         }
-        return;
-      }).then(result => {
-        if (result.committed) {
-          runTransaction(turnRef, curr => (curr + 1) % 4);
-        }
+      }).then(res => {
+        if (res.committed) runTransaction(turnRef, t => (t + 1) % 4);
       });
     }
   </script>
