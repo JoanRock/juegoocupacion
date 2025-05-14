@@ -1,101 +1,58 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Juego de Ocupación Online</title>
+  <meta charset="UTF-8" />
+  <title>Ocupa Casillas – 4 Jugadores Mejorado</title>
   <style>
-    :root {
-      --bg-page: #2c3e50;
-      --board-bg: #ecf0f1;
-      --cell-light: #ffffff;
-      --cell-dark: #bdc3c7;
-      --highlight: #f1c40f;
-      --shadow: rgba(0,0,0,0.2);
-      --token-size: 1.5rem;
-      --dot-size: 20%;
-      --transition: 0.2s;
-      --font: 'Montserrat', sans-serif;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
+      font-family: sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
-      background: var(--bg-page);
-      font-family: var(--font);
-      color: #fff;
-      min-height: 100vh;
       padding: 20px;
+      background: #f5f5f5;
     }
-    h1 {
-      font-size: 2.5rem;
-      margin-bottom: 10px;
-      text-shadow: 2px 2px 4px var(--shadow);
-    }
-    #status {
-      background: var(--board-bg);
-      color: #2c3e50;
-      padding: 12px 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 8px var(--shadow);
-      margin-bottom: 15px;
-      width: fit-content;
-    }
+    h1 { margin-bottom: 5px; }
+    #status { margin-bottom: 10px; font-weight: bold; }
+    #controls { margin-bottom: 15px; }
     #board {
       display: grid;
-      grid-template-columns: repeat(8, 60px);
-      grid-template-rows: repeat(8, 60px);
-      gap: 4px;
-      background: var(--board-bg);
-      padding: 12px;
-      border-radius: 16px;
-      box-shadow: 0 6px 12px var(--shadow);
-    }
-    .cell {
-      position: relative;
-      background: var(--cell-light);
-      cursor: pointer;
-      transition: transform var(--transition), background var(--transition);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      grid-template-columns: repeat(8, 40px);
+      gap: 2px;
+      background: #444;
+      padding: 2px;
       border-radius: 8px;
     }
-    .cell.dark { background: var(--cell-dark); }
-    .cell:hover { transform: scale(1.05); background: var(--highlight); }
-    .cell.selected { outline: 3px solid var(--highlight); }
-    .trail {
-      position: absolute;
-      width: var(--dot-size);
-      height: var(--dot-size);
-      border-radius: 50%;
-      opacity: 0.9;
+    .cell {
+      width: 40px; height: 40px;
+      background: #fff; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform .1s;
     }
-    .token {
-      font-size: var(--token-size);
-      transition: transform var(--transition);
-    }
-    .cell.token-0 .token:hover,
-    .cell.token-1 .token:hover,
-    .cell.token-2 .token:hover,
-    .cell.token-3 .token:hover {
-      transform: scale(1.2);
-    }
-    .cell.trail-0 .trail { background: rgba(231, 76, 60, 0.8); }
-    .cell.trail-1 .trail { background: rgba(39, 174, 96, 0.8); }
-    .cell.trail-2 .trail { background: rgba(52, 152, 219, 0.8); }
-    .cell.trail-3 .trail { background: rgba(243, 156, 18, 0.8); }
-    .cell.token-0 .token { color: #e74c3c; }
-    .cell.token-1 .token { color: #27ae60; }
-    .cell.token-2 .token { color: #3498db; }
-    .cell.token-3 .token { color: #f39c12; }
-    .cell.my { box-shadow: inset 0 0 0 3px #000; }
+    .cell:hover { transform: scale(1.1); }
+
+    /* Trails */
+    .trail0 { background: #ffdddd; }
+    .trail1 { background: #ddffdd; }
+    .trail2 { background: #ddddff; }
+    .trail3 { background: #ffeedd; }
+
+    /* Pieces */
+    .piece0 { background: #ff5555; }
+    .piece1 { background: #55ff55; }
+    .piece2 { background: #5555ff; }
+    .piece3 { background: #ffdd55; }
+
+    .my { box-shadow: inset 0 0 0 3px #333; }
+    .eliminated { opacity: 0.3; }
   </style>
 </head>
 <body>
-  <h1>Juego de Ocupación Online</h1>
-  <div id="status">Cargando…</div>
+  <h1>Ocupa Casillas</h1>
+  <div id="status">Conectando…</div>
+  <div id="controls">
+    <button id="reset">Reiniciar juego</button>
+  </div>
   <div id="board"></div>
 
   <script type="module">
@@ -105,12 +62,11 @@
       ref,
       onValue,
       runTransaction,
-      set,
-      get
+      set
     } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
 
-    // Firebase config
-    const cfg = {
+    // Configuración Firebase
+    const firebaseConfig = {
       apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
       authDomain: "juego-ocupacion.firebaseapp.com",
       databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
@@ -119,168 +75,162 @@
       messagingSenderId: "567270483949",
       appId: "1:567270483949:web:7b5150bd422b5175a8e4"
     };
-    const app = initializeApp(cfg);
+    const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
 
-    // Game constants
-    const SIZE   = 8;
-    const CENTER = new Set(["3,3","3,4","4,3","4,4"]);
-    const PERIM  = c => {
-      const [r, c2] = c.split(",").map(Number);
-      return r===0||r===7||c2===0||c2===7;
-    };
-
-    // Firebase ref
-    const gameId = "partida1";
-    const gref   = ref(db, `games/${gameId}`);
-
-    // Initial state
-    const initialState = {
-      pieces: { "0,0":0, "7,7":1, "0,7":2, "7,0":3 },
-      trails: {}
-    };
-
-    function resetGame() {
-      set(gref, initialState);
+    // Identificador único por sesión
+    let sessionId = localStorage.getItem("sessionId");
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      localStorage.setItem("sessionId", sessionId);
     }
 
-    // Initialize if empty
-    get(gref).then(snap => {
-      if (!snap.exists()) resetGame();
+    // Referencias base
+    const gameId      = "partida1";
+    const baseRef     = ref(db, `games/${gameId}`);
+    const playersRef  = ref(db, `games/${gameId}/players`);
+    const turnRef     = ref(db, `games/${gameId}/turn`);
+    const posRef      = ref(db, `games/${gameId}/positions`);
+    const trailRef    = ref(db, `games/${gameId}/trails`);
+    const elimRef     = ref(db, `games/${gameId}/eliminated`);
+
+    const BOARD_SIZE = 8;
+    const initialPos = {
+      0: "0,0",
+      1: "7,7",
+      2: "0,7",
+      3: "7,0"
+    };
+    const central  = new Set(["3,3","3,4","4,3","4,4"]);
+    const isPerim  = c => {
+      const [x,y]=c.split(",").map(Number);
+      return x===0||x===7||y===0||y===7;
+    };
+
+    // Unirse y asignar PID
+    runTransaction(playersRef, p=>{
+      p = p||{};
+      if (p[sessionId]===undefined && Object.keys(p).length<4) {
+        p[sessionId] = Object.keys(p).length;
+      }
+      return p;
     });
 
-    // Build board UI
+    let myPid = null;
+
+    // UI: construir tablero
     const boardEl = document.getElementById("board");
-    for (let r = 0; r < SIZE; r++) {
-      for (let c = 0; c < SIZE; c++) {
-        const cell = document.createElement("div");
-        cell.className = "cell " + ((r+c)%2 ? "dark" : "");
-        cell.dataset.coord = `${r},${c}`;
-        boardEl.appendChild(cell);
+    for (let y=0; y<BOARD_SIZE; y++){
+      for (let x=0; x<BOARD_SIZE; x++){
+        const c = document.createElement("div");
+        c.classList.add("cell");
+        c.dataset.coord = `${x},${y}`;
+        c.addEventListener("click", ()=>move(c.dataset.coord));
+        boardEl.appendChild(c);
       }
     }
 
-    let lastState = null;
-    let selected  = null;
+    // Botón reset: solo resetea posiciones, trails, eliminados y turno
+    document.getElementById("reset").onclick = ()=>{
+      set(turnRef, 0);
+      set(posRef, {});
+      set(trailRef, {});
+      set(elimRef, {});
+    };
 
-    // Listen for game updates
-    onValue(gref, snap => {
-      const game = snap.val();
-      if (!game) return;
-      lastState = game;
-
-      // Update status
-      document.getElementById("status").textContent = selected
-        ? `Ficha en ${selected} seleccionada`
-        : "Selecciona una ficha";
-
-      // Paint cells
-      document.querySelectorAll(".cell").forEach(cell => {
-        const coord = cell.dataset.coord;
-        cell.className = "cell " + ((+coord.split(",")[0] + +coord.split(",")[1])%2 ? "dark" : "");
-        // trail
-        if (game.trails?.[coord] != null) {
-          cell.classList.add(`trail-${game.trails[coord]}`);
-          const dot = document.createElement("div");
-          dot.className = "trail";
-          cell.appendChild(dot);
+    // Escuchar estado completo
+    onValue(baseRef, snap=>{
+      const g = snap.val();
+      if (!g) return;
+      // asignar pid
+      if (myPid===null && g.players && g.players[sessionId]!==undefined) {
+        myPid = g.players[sessionId];
+        document.getElementById("status").textContent = `Tu ficha: ${myPid}`;
+        // colocar inicial si no existe
+        if (!g.positions || g.positions[myPid]===undefined) {
+          runTransaction(posRef, pos=>{
+            pos = pos||{};
+            pos[myPid] = initialPos[myPid];
+            return pos;
+          });
         }
-        // piece
-        if (game.pieces?.[coord] != null) {
-          const p = game.pieces[coord];
-          cell.classList.add(`token-${p}`);
-          const icon = document.createElement("span");
-          icon.className = "token";
-          icon.textContent = "♟";
-          cell.appendChild(icon);
-        }
-        // selection highlight
-        if (coord === selected) {
-          cell.classList.add("selected");
-        }
-
-        // attach click handler
-        cell.onclick = () => handleClick(coord);
-      });
-
-      // Check victory
-      const occupied = new Set([ ...Object.keys(game.trails||{}), ...Object.keys(game.pieces||{}) ]);
-      if (occupied.size >= SIZE*SIZE || new Set(Object.values(game.pieces||{})).size <= 1) {
-        const counts = [0,0,0,0];
-        for (let t in game.trails) counts[game.trails[t]]++;
-        const max = Math.max(...counts);
-        const winners = counts.map((c,i)=>c===max?i+1:null).filter(i=>i);
-        alert(winners.length>1
-          ? `Empate entre jugadores ${winners.join(", ")}`
-          : `¡Gana jugador ${winners[0]}!`);
-        resetGame();
-        selected = null;
       }
+      // actualizar turno
+      document.getElementById("status").textContent =
+        `Tu ficha: ${myPid} – Turno de: ${g.turn}`;
+
+      // repintar celdas
+      document.querySelectorAll(".cell").forEach(div=>{
+        const c = div.dataset.coord;
+        div.className = "cell";
+        if (g.trails && g.trails[c]!=null) div.classList.add(`trail${g.trails[c]}`);
+        if (g.positions) {
+          for (let pid in g.positions) {
+            if (g.positions[pid]===c) {
+              div.classList.add(`piece${pid}`);
+              if (Number(pid)===myPid) div.classList.add("my");
+            }
+          }
+        }
+        if (g.eliminated && g.eliminated[c]!=null) div.classList.add("eliminated");
+      });
     });
 
-    function handleClick(coord) {
-      const game = lastState;
-      if (!game) return;
-      // if clicking on own selected cell: deselect
-      if (coord === selected) {
-        selected = null;
-        document.getElementById("status").textContent = "Selecciona una ficha";
-        return;
-      }
-      // if clicking on a piece: select it
-      if (game.pieces?.[coord] != null) {
-        selected = coord;
-        document.getElementById("status").textContent = `Ficha en ${coord} seleccionada`;
-        return;
-      }
-      // if clicking on empty and something selected: try move
-      if (selected != null) {
-        const from = selected, to = coord;
-        runTransaction(gref, g => {
-          if (!g) return g;
-          const p = g.pieces?.[from];
-          if (p == null) return;
-          const [or,oc] = from.split(",").map(Number);
-          const [tr,tc] = to.split(",").map(Number);
-          const dr = Math.abs(tr - or), dc = Math.abs(tc - oc);
-          const normal = (dr<=1 && dc<=1 && (dr+dc>0));
-          const teleport = CENTER.has(from) && PERIM(to);
-          if (!normal && !teleport) return;
-          // leave trail
-          g.trails = g.trails || {};
-          g.trails[from] = p;
-          // capture
-          if (g.pieces[to] != null && g.pieces[to] !== p) {
-            delete g.pieces[to];
+    // Función de movimiento
+    function move(to) {
+      runTransaction(baseRef, g=>{
+        if (!g || g.turn===undefined || myPid===null) return;
+        const pid = g.turn;
+        if (pid!==myPid) return;  // no es tu turno
+        g.positions = g.positions||{};
+        g.trails    = g.trails||{};
+        g.eliminated= g.eliminated||{};
+        // posición actual
+        const old = g.positions[pid];
+        if (!old) return;
+        const [ox,oy]=old.split(",").map(Number);
+        const [tx,ty]=to.split(",").map(Number);
+        const dx=Math.abs(tx-ox), dy=Math.abs(ty-oy);
+        const adj = dx<=1 && dy<=1 && (dx+dy>0);
+        const jump = central.has(old) && isPerim(to);
+        if (!adj && !jump) return;
+        // dejar trail
+        g.trails[old] = pid;
+        // check captura: si otra pieza está en 'to'
+        for (let opid in g.positions) {
+          if (g.positions[opid]===to && opid!=pid) {
+            // eliminar pieza oponente
+            delete g.positions[opid];
+            g.eliminated[to] = Number(opid);
           }
-          // move
-          delete g.pieces[from];
-          g.pieces[to] = p;
-          // eliminate surrounded
-          for (let [c,pp] of Object.entries(g.pieces)) {
-            const [cr,cc] = c.split(",").map(Number);
-            let trapped = true;
-            for (let rr = cr-1; rr <= cr+1; rr++) {
-              for (let cc2 = cc-1; cc2 <= cc+1; cc2++) {
-                if (rr===cr && cc2===cc) continue;
-                if (rr<0||cc2<0||rr>=SIZE||cc2>=SIZE) { trapped = false; break; }
-                const key = `${rr},${cc2}`;
-                if (!((g.trails[key]!=null) || (g.pieces[key]!=null))) {
-                  trapped = false; break;
-                }
-              }
-              if (!trapped) break;
-            }
-            if (trapped) delete g.pieces[c];
+        }
+        // mover pieza
+        g.positions[pid] = to;
+        // chequeo de rodeo: eliminar rodeados
+        for (let opid in g.positions) {
+          const pcoord = g.positions[opid];
+          const [px,py]=pcoord.split(",").map(Number);
+          let surrounded=true;
+          for (let ix=-1;ix<=1;ix++) for (let iy=-1;iy<=1;iy++) {
+            if (ix===0&&iy===0) continue;
+            const nc = `${px+ix},${py+iy}`;
+            if (!g.trails[nc] && g.positions[opid]!==nc) surrounded=false;
           }
-          return g;
-        }).then(res => {
-          selected = null;
-          document.querySelectorAll(".cell.selected").forEach(c=>c.classList.remove("selected"));
-          document.getElementById("status").textContent =
-            res.committed ? "Movimiento realizado" : "Movimiento inválido";
-        });
-      }
+          if (surrounded) {
+            delete g.positions[opid];
+            g.eliminated[pcoord]=Number(opid);
+          }
+        }
+        // avanzar turno
+        let next=(pid+1)%4;
+        const alive = Object.keys(g.positions).map(Number);
+        if (!alive.includes(next)) {
+          // busca siguiente jugador vivo
+          next = alive.length? alive[0] : pid;
+        }
+        g.turn = next;
+        return g;
+      });
     }
   </script>
 </body>
