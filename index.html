@@ -1,72 +1,86 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <title>Ocupa Casillas – 4 Jugadores Mejorado</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Juego de Ocupación Online</title>
   <style>
-    body {
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-      background: #f5f5f5;
+    :root {
+      --bg-page: #2c3e50;
+      --board-bg: #ecf0f1;
+      --cell-light: #ffffff;
+      --cell-dark: #bdc3c7;
+      --highlight: #f1c40f;
+      --shadow: rgba(0,0,0,0.2);
+      --token-size: 100%;
+      --dot-size: 20%;
+      --move-color: #f39c12;
+      --transition: 0.2s;
+      --font: 'Montserrat', sans-serif;
     }
-    h1 { margin-bottom: 5px; }
-    #status { margin-bottom: 10px; font-weight: bold; }
-    #controls { margin-bottom: 15px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      display: flex; flex-direction: column; align-items: center;
+      background: var(--bg-page); font-family: var(--font);
+      color: #fff; min-height: 100vh; padding: 20px;
+    }
+    h1 { font-size: 2.5rem; margin-bottom: 10px; text-shadow: 2px 2px 4px var(--shadow); }
+    #status, #scores {
+      background: var(--board-bg); color: #2c3e50;
+      padding: 12px 20px; border-radius: 12px;
+      box-shadow: 0 4px 8px var(--shadow);
+      margin: 10px; width: fit-content;
+    }
+    #scores { display: flex; gap: 15px; }
+    .score { display: flex; align-items: center; font-weight: bold; }
+    .score .dot { width: 16px; height: 16px; border-radius: 50%; margin-right: 6px; }
     #board {
-      display: grid;
-      grid-template-columns: repeat(8, 40px);
-      gap: 2px;
-      background: #444;
-      padding: 2px;
-      border-radius: 8px;
+      display: grid; grid-template-columns: repeat(8, 60px);
+      grid-template-rows: repeat(8, 60px); gap: 4px;
+      background: var(--board-bg); padding: 12px;
+      border-radius: 16px; box-shadow: 0 6px 12px var(--shadow);
     }
     .cell {
-      width: 40px; height: 40px;
-      background: #fff; border-radius: 4px;
+      position: relative; background: var(--cell-light);
+      cursor: pointer; transition: background var(--transition);
       display: flex; align-items: center; justify-content: center;
-      cursor: pointer; transition: transform .1s;
+      border-radius: 8px;
     }
-    .cell:hover { transform: scale(1.1); }
-
-    /* Trails */
-    .trail0 { background: #ffdddd; }
-    .trail1 { background: #ddffdd; }
-    .trail2 { background: #ddddff; }
-    .trail3 { background: #ffeedd; }
-
-    /* Pieces */
-    .piece0 { background: #ff5555; }
-    .piece1 { background: #55ff55; }
-    .piece2 { background: #5555ff; }
-    .piece3 { background: #ffdd55; }
-
-    .my { box-shadow: inset 0 0 0 3px #333; }
-    .eliminated { opacity: 0.3; }
+    .cell.dark { background: var(--cell-dark); }
+    .cell.selected { outline: 3px solid var(--highlight); }
+    .cell.move-anim { animation: highlight 0.5s ease; }
+    @keyframes highlight {
+      from { background-color: var(--move-color); }
+      to { background-color: var(--cell-light); }
+    }
+    .trail { position: absolute; width: var(--dot-size); height: var(--dot-size); border-radius: 50%; opacity: 0.9; }
+    .token { font-size: var(--token-size); transition: transform var(--transition); }
+    .cell.token-0 .token:hover,
+    .cell.token-1 .token:hover,
+    .cell.token-2 .token:hover,
+    .cell.token-3 .token:hover { transform: scale(1.2); }
+    .cell.trail-0 .trail { background: rgba(231, 76, 60, 0.8); }
+    .cell.trail-1 .trail { background: rgba(39, 174, 96, 0.8); }
+    .cell.trail-2 .trail { background: rgba(52, 152, 219, 0.8); }
+    .cell.trail-3 .trail { background: rgba(243, 156, 18, 0.8); }
+    .cell.token-0 .token { color: #e74c3c; }
+    .cell.token-1 .token { color: #27ae60; }
+    .cell.token-2 .token { color: #3498db; }
+    .cell.token-3 .token { color: #f39c12; }
   </style>
 </head>
 <body>
-  <h1>Ocupa Casillas</h1>
-  <div id="status">Conectando…</div>
-  <div id="controls">
-    <button id="reset">Reiniciar juego</button>
-  </div>
+  <h1>Juego de Ocupación Online</h1>
+  <div id="status">Cargando…</div>
+  <div id="scores"></div>
   <div id="board"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
-    import {
-      getDatabase,
-      ref,
-      onValue,
-      runTransaction,
-      set
-    } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
+    import { getDatabase, ref, onValue, runTransaction, set, get }
+      from "https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js";
 
-    // Configuración Firebase
-    const firebaseConfig = {
+    const cfg = {
       apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
       authDomain: "juego-ocupacion.firebaseapp.com",
       databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
@@ -75,161 +89,175 @@
       messagingSenderId: "567270483949",
       appId: "1:567270483949:web:7b5150bd422b5175a8e4"
     };
-    const app = initializeApp(firebaseConfig);
-    const db  = getDatabase(app);
+    const app = initializeApp(cfg);
+    const db = getDatabase(app);
 
-    // Identificador único por sesión
-    let sessionId = localStorage.getItem("sessionId");
-    if (!sessionId) {
-      sessionId = crypto.randomUUID();
-      localStorage.setItem("sessionId", sessionId);
-    }
+    const sessionId = localStorage.sessionId || crypto.randomUUID();
+    localStorage.sessionId = sessionId;
 
-    // Referencias base
-    const gameId      = "partida1";
-    const baseRef     = ref(db, `games/${gameId}`);
-    const playersRef  = ref(db, `games/${gameId}/players`);
-    const turnRef     = ref(db, `games/${gameId}/turn`);
-    const posRef      = ref(db, `games/${gameId}/positions`);
-    const trailRef    = ref(db, `games/${gameId}/trails`);
-    const elimRef     = ref(db, `games/${gameId}/eliminated`);
+    let selected = null;
+    const gameId = "partida1";
+    const gref = ref(db, `games/${gameId}`);
 
-    const BOARD_SIZE = 8;
-    const initialPos = {
-      0: "0,0",
-      1: "7,7",
-      2: "0,7",
-      3: "7,0"
-    };
-    const central  = new Set(["3,3","3,4","4,3","4,4"]);
-    const isPerim  = c => {
-      const [x,y]=c.split(",").map(Number);
+    const SIZE = 8;
+    const CENTER = new Set(["3,3","3,4","4,3","4,4"]);
+    const perim = c => {
+      const [x,y] = c.split(",").map(Number);
       return x===0||x===7||y===0||y===7;
     };
 
-    // Unirse y asignar PID
-    runTransaction(playersRef, p=>{
-      p = p||{};
-      if (p[sessionId]===undefined && Object.keys(p).length<4) {
-        p[sessionId] = Object.keys(p).length;
-      }
-      return p;
-    });
-
-    let myPid = null;
-
-    // UI: construir tablero
+    // Build board
     const boardEl = document.getElementById("board");
-    for (let y=0; y<BOARD_SIZE; y++){
-      for (let x=0; x<BOARD_SIZE; x++){
-        const c = document.createElement("div");
-        c.classList.add("cell");
-        c.dataset.coord = `${x},${y}`;
-        c.addEventListener("click", ()=>move(c.dataset.coord));
-        boardEl.appendChild(c);
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const cell = document.createElement("div");
+        cell.className = `cell ${(r+c)%2?'dark':''}`;
+        cell.dataset.coord = `${r},${c}`;
+        cell.onclick = () => onCellClick(cell);
+        boardEl.appendChild(cell);
       }
     }
 
-    // Botón reset: solo resetea posiciones, trails, eliminados y turno
-    document.getElementById("reset").onclick = ()=>{
-      set(turnRef, 0);
-      set(posRef, {});
-      set(trailRef, {});
-      set(elimRef, {});
-    };
+    // Initialize
+    function resetGame() {
+      set(gref, {
+        players: {},
+        turn: 0,
+        pieces: {"0,0":0,"7,7":1,"0,7":2,"7,0":3},
+        trails: {}
+      });
+    }
+    get(gref).then(snap => { if (!snap.exists()) resetGame(); });
 
-    // Escuchar estado completo
-    onValue(baseRef, snap=>{
+    // Join
+    runTransaction(ref(db, `games/${gameId}/players`), players => {
+      players = players || {};
+      if (players[sessionId] == null && Object.keys(players).length < 4) {
+        players[sessionId] = Object.keys(players).length;
+      }
+      return players;
+    });
+
+    // Listen
+    onValue(gref, snap => {
       const g = snap.val();
       if (!g) return;
-      // asignar pid
-      if (myPid===null && g.players && g.players[sessionId]!==undefined) {
-        myPid = g.players[sessionId];
-        document.getElementById("status").textContent = `Tu ficha: ${myPid}`;
-        // colocar inicial si no existe
-        if (!g.positions || g.positions[myPid]===undefined) {
-          runTransaction(posRef, pos=>{
-            pos = pos||{};
-            pos[myPid] = initialPos[myPid];
-            return pos;
-          });
-        }
-      }
-      // actualizar turno
-      document.getElementById("status").textContent =
-        `Tu ficha: ${myPid} – Turno de: ${g.turn}`;
 
-      // repintar celdas
-      document.querySelectorAll(".cell").forEach(div=>{
-        const c = div.dataset.coord;
-        div.className = "cell";
-        if (g.trails && g.trails[c]!=null) div.classList.add(`trail${g.trails[c]}`);
-        if (g.positions) {
-          for (let pid in g.positions) {
-            if (g.positions[pid]===c) {
-              div.classList.add(`piece${pid}`);
-              if (Number(pid)===myPid) div.classList.add("my");
-            }
-          }
+      // Status
+      const turn = g.turn ?? 0;
+      document.getElementById("status").textContent = `Turno: Jugador ${turn+1}`;
+
+      // Scores
+      const counts = [0,0,0,0];
+      for (let t in g.trails||{}) counts[g.trails[t]]++;
+      document.getElementById("scores").innerHTML = counts.map((v,i) =>
+        `<div class="score">
+           <div class="dot" style="background:${["#e74c3c","#27ae60","#3498db","#f39c12"][i]}"></div>
+           Jugador ${i+1}: ${v}
+         </div>`
+      ).join("");
+
+      // Render
+      document.querySelectorAll(".cell").forEach(cell => {
+        const coord = cell.dataset.coord;
+        cell.className = `cell ${(coord.split(",").reduce((a,v,i)=>a+v*(i?8:1),0)%2?'dark':'')}`;
+        cell.classList.remove("selected","move-anim");
+
+        if (g.trails?.[coord] != null) {
+          cell.classList.add(`trail-${g.trails[coord]}`);
+          const dot = document.createElement("div");
+          dot.className = "trail";
+          cell.append(dot);
         }
-        if (g.eliminated && g.eliminated[c]!=null) div.classList.add("eliminated");
+        if (g.pieces?.[coord] != null) {
+          cell.classList.add(`token-${g.pieces[coord]}`);
+          const icon = document.createElement("span");
+          icon.className = "token";
+          icon.textContent = "♟";
+          cell.append(icon);
+        }
       });
     });
 
-    // Función de movimiento
-    function move(to) {
-      runTransaction(baseRef, g=>{
-        if (!g || g.turn===undefined || myPid===null) return;
-        const pid = g.turn;
-        if (pid!==myPid) return;  // no es tu turno
-        g.positions = g.positions||{};
-        g.trails    = g.trails||{};
-        g.eliminated= g.eliminated||{};
-        // posición actual
-        const old = g.positions[pid];
-        if (!old) return;
-        const [ox,oy]=old.split(",").map(Number);
-        const [tx,ty]=to.split(",").map(Number);
-        const dx=Math.abs(tx-ox), dy=Math.abs(ty-oy);
-        const adj = dx<=1 && dy<=1 && (dx+dy>0);
-        const jump = central.has(old) && isPerim(to);
-        if (!adj && !jump) return;
-        // dejar trail
-        g.trails[old] = pid;
-        // check captura: si otra pieza está en 'to'
-        for (let opid in g.positions) {
-          if (g.positions[opid]===to && opid!=pid) {
-            // eliminar pieza oponente
-            delete g.positions[opid];
-            g.eliminated[to] = Number(opid);
+    function onCellClick(cell) {
+      const coord = cell.dataset.coord;
+      get(gref).then(snap => {
+        const g = snap.val();
+        if (!g) return;
+        if (!selected) {
+          if (g.pieces?.[coord] != null) {
+            selected = coord;
+            cell.classList.add("selected");
           }
+        } else {
+          attemptMove(selected, coord);
+          selected = null;
         }
-        // mover pieza
-        g.positions[pid] = to;
-        // chequeo de rodeo: eliminar rodeados
-        for (let opid in g.positions) {
-          const pcoord = g.positions[opid];
-          const [px,py]=pcoord.split(",").map(Number);
-          let surrounded=true;
-          for (let ix=-1;ix<=1;ix++) for (let iy=-1;iy<=1;iy++) {
-            if (ix===0&&iy===0) continue;
-            const nc = `${px+ix},${py+iy}`;
-            if (!g.trails[nc] && g.positions[opid]!==nc) surrounded=false;
-          }
-          if (surrounded) {
-            delete g.positions[opid];
-            g.eliminated[pcoord]=Number(opid);
-          }
+      });
+    }
+
+    function attemptMove(src, dest) {
+      runTransaction(gref, (g) => {
+        if (!g) return;
+        const turn = g.turn ?? 0;
+        const p = g.pieces?.[src];
+        if (p == null || p !== turn) return;
+
+        const [sr,sc] = src.split(",").map(Number);
+        const [dr,dc] = dest.split(",").map(Number);
+        const ddr = Math.abs(dr - sr), ddc = Math.abs(dc - sc);
+        const normal = ddr<=1 && ddc<=1 && (ddr+ddc>0);
+        const teleport = CENTER.has(src) && perim(dest);
+        if (!normal && !teleport) return;
+
+        // trail
+        g.trails = g.trails || {};
+        g.trails[src] = p;
+
+        // capture
+        if (g.pieces[dest] != null && g.pieces[dest] != p) {
+          delete g.pieces[dest];
         }
-        // avanzar turno
-        let next=(pid+1)%4;
-        const alive = Object.keys(g.positions).map(Number);
-        if (!alive.includes(next)) {
-          // busca siguiente jugador vivo
-          next = alive.length? alive[0] : pid;
+
+        // move
+        delete g.pieces[src];
+        g.pieces[dest] = p;
+
+        // eliminate surrounded
+        for (let [c,pi] of Object.entries(g.pieces)) {
+          let trapped = true;
+          const [cr,cc] = c.split(",").map(Number);
+          for (let rr = cr-1; rr <= cr+1; rr++) {
+            for (let cc2 = cc-1; cc2 <= cc+1; cc2++) {
+              if (rr===cr && cc2===cc) continue;
+              if (rr<0||cc2<0||rr>=SIZE||cc2>=SIZE) { trapped = false; break; }
+              const k = `${rr},${cc2}`;
+              if (!g.pieces[k] && !g.trails[k]) { trapped = false; break; }
+            }
+            if (!trapped) break;
+          }
+          if (trapped) delete g.pieces[c];
+        }
+
+        // next turn
+        let next = (turn + 1) % 4;
+        const alive = new Set(Object.values(g.pieces));
+        while (!alive.has(next) && alive.size > 1) {
+          next = (next + 1) % 4;
         }
         g.turn = next;
+
+        // mark moved for anim
+        g._moved = dest;
         return g;
+      }, (e,comm,snap) => {
+        if (comm && snap.val()?._moved) {
+          const moved = snap.val()._moved;
+          const cell = document.querySelector(`[data-coord='${moved}']`);
+          if (cell) cell.classList.add("move-anim");
+          // cleanup flag
+          runTransaction(gref, g => { if (g) delete g._moved; return g; });
+        }
       });
     }
   </script>
