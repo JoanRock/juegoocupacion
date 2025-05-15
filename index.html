@@ -64,9 +64,10 @@
     #board {
       display: grid;
       grid-template-columns: repeat(8, 1fr);
-      aspect-ratio: 1;
+      grid-template-rows: repeat(8, 1fr);
       width: 100%;
       max-width: 400px;
+      aspect-ratio: 1;
       gap: 2px;
       background: var(--panel-bg);
       padding: 3px;
@@ -136,7 +137,6 @@
   <div id="scores"></div>
   <div id="board"></div>
 
-  <!-- Firebase scripts with defer to ensure execution after DOM parsing -->
   <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script defer>
@@ -152,12 +152,37 @@
       };
       firebase.initializeApp(firebaseConfig);
       const db = firebase.database();
-      // Aquí deberías incluir la lógica de inicialización y sincronización del juego
+      const ref = db.ref("games/partida1");
 
+      ref.on("value", (snap) => {
+        const game = snap.val();
+        if (!game) return;
 
-      // AÑADIDO: lógica de detección de tablero lleno
-      function updateUI(game) {
-        const totalCeldas = 8 * 8;
+        const boardEl = document.getElementById("board");
+        boardEl.innerHTML = "";
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 8; c++) {
+            const cell = document.createElement("div");
+            cell.className = "cell";
+            const key = `${r},${c}`;
+            if (game.trails && game.trails[key] != null) {
+              const trail = document.createElement("div");
+              trail.className = "trail";
+              trail.style.backgroundColor = `hsl(${game.trails[key]*90}, 70%, 60%)`;
+              cell.appendChild(trail);
+            }
+            if (game.pieces && game.pieces[key] != null) {
+              const token = document.createElement("span");
+              token.className = "token";
+              token.textContent = "♟";
+              token.style.color = `hsl(${game.pieces[key]*90}, 70%, 50%)`;
+              cell.appendChild(token);
+            }
+            boardEl.appendChild(cell);
+          }
+        }
+
+        const totalCeldas = 64;
         const ocupadas = Object.keys(game.pieces || {}).length + Object.keys(game.trails || {}).length;
 
         if (ocupadas === totalCeldas) {
@@ -172,42 +197,15 @@
             } else {
               alert(`¡Gana Jugador ${ganadores[0] + 1}!`);
             }
-            // Reiniciar partida
-            firebase.database().ref('games/partida1').update({
-              turn: 0,
-              pieces: { '0,0': 0, '0,7': 1, '7,0': 2, '7,7': 3 },
-              trails: {}
-            });
-          }, 200);
-          return;
-        }
 
-        // Aquí va el resto del renderizado del tablero y actualización de estado
-      }
-        const totalCeldas = 8 * 8;
-        const ocupadas = Object.keys(game.pieces || {}).length + Object.keys(game.trails || {}).length;
-
-        if (ocupadas === totalCeldas) {
-          const puntuaciones = [0, 0, 0, 0];
-          Object.values(game.trails || {}).forEach(j => puntuaciones[j]++);
-          const maxPuntos = Math.max(...puntuaciones);
-          const ganadores = puntuaciones.map((v, i) => v === maxPuntos ? i : null).filter(v => v !== null);
-
-          setTimeout(() => {
-            if (ganadores.length > 1) {
-              alert(`Empate entre ${ganadores.map(i => `Jugador ${i + 1}`).join(' y ')}`);
-            } else {
-              alert(`¡Gana Jugador ${ganadores[0] + 1}!`);
-            }
-            // Reiniciar partida
-            firebase.database().ref('games/partida1').update({
+            ref.set({
               turn: 0,
               pieces: { '0,0': 0, '0,7': 1, '7,0': 2, '7,7': 3 },
               trails: {}
             });
           }, 200);
         }
-      }
+      });
     });
   </script>
 </body>
