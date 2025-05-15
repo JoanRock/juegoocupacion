@@ -141,6 +141,17 @@
   <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script defer>
     window.addEventListener('load', () => {
+      const firebaseConfig = {
+        apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
+        authDomain: "juego-ocupacion.firebaseapp.com",
+        databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "juego-ocupacion",
+        storageBucket: "juego-ocupacion.appspot.com",
+        messagingSenderId: "567270483949",
+        appId: "1:567270483949:web:7b5150bd422b5175a8e4"
+      };
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.database();
       // Aquí deberías incluir la lógica de inicialización y sincronización del juego
 
       // Lógica para declarar ganador si se llena el tablero
