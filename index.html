@@ -27,6 +27,7 @@
       padding: 8px 16px; border-radius: 6px;
       margin-bottom: 12px; color: #fff;
       background: var(--panel-bg);
+      min-width: 200px; text-align: center;
     }
     #scores {
       display: flex; gap: 12px; margin-bottom: 12px;
@@ -66,9 +67,7 @@
     .trail-1 { background: rgba(39,174,96,0.8); }
     .trail-2 { background: rgba(52,152,219,0.8); }
     .trail-3 { background: rgba(243,156,18,0.8); }
-    .token {
-      font-size: var(--token-size); line-height: 1;
-    }
+    .token { font-size: var(--token-size); line-height: 1; }
     .token-0 { color: #e74c3c; }
     .token-1 { color: #2ecc71; }
     .token-2 { color: #3498db; }
@@ -85,6 +84,14 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script>
+    // Helper: actualizar estado
+    function updateStatus(text, bgColor) {
+      const st = document.getElementById('status');
+      st.textContent = text;
+      if (bgColor) st.style.backgroundColor = bgColor;
+    }
+
+    // Init Firebase
     const cfg = {
       apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
       authDomain: "juego-ocupacion.firebaseapp.com",
@@ -95,6 +102,7 @@
       appId: "1:567270483949:web:7b5150bd422b5175a8e4"
     };
     firebase.initializeApp(cfg);
+    firebase.database.enableLogging(function(msg) { console.log(msg); });
     const db = firebase.database();
     const gameRef = db.ref('games/partida1');
 
@@ -102,109 +110,151 @@
     let selected = null;
     const colors = ['#e74c3c','#2ecc71','#3498db','#f1c40f'];
 
-    // construir tablero
+    // Construir tablero
     const boardEl = document.getElementById('board');
-    for (let r=0;r<SIZE;r++){
-      for (let c=0;c<SIZE;c++){
-        const cell=document.createElement('div');
-        cell.className='cell';
-        cell.dataset.coord=`${r},${c}`;
-        cell.onclick=()=>handleClick(cell);
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.coord = `${r},${c}`;
+        cell.onclick = () => handleClick(cell);
         boardEl.appendChild(cell);
       }
     }
 
-    // init partida
-    gameRef.once('value').then(snap=>{
-      if(!snap.exists()){
-        gameRef.set({ turn:0, pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3}, trails:{} });
-      }
+    // Inicializar partida
+    gameRef.once('value')
+      .then(snap => {
+        if (!snap.exists()) {
+          updateStatus('Inicializando partida…', '#f1c40f');
+          return gameRef.set({ turn:0, pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3}, trails:{} });
+        }
+      })
+      .catch(err => updateStatus('Error init: ' + err.message, '#e74c3c'));
+
+    // Conexión RTDB
+    db.ref('.info/connected').on('value', snap => {
+      const ok = snap.val();
+      updateStatus(ok ? 'Conectado' : 'Sin conexión', ok ? colors[1] : colors[0]);
     });
 
-    // conexión
-    db.ref('.info/connected').on('value',snap=>{
-      const ok=snap.val();
-      const st=document.getElementById('status');
-      st.textContent=ok?'Conectado':'Sin conexión';
-      st.style.backgroundColor=ok?colors[1]:colors[0];
-    });
+    // Escuchar estado
+    gameRef.on('value', snap => {
+      const g = snap.val();
+      if (!g) return;
+      updateUI(g);
+    }, err => updateStatus('Error DB: ' + err.message, '#e74c3c'));
 
-    // escucha estado
-    gameRef.on('value',snap=>{
-      const g=snap.val(); if(!g) return; updateUI(g);
-    });
+    function updateUI(g) {
+      const turn = g.turn || 0;
+      updateStatus(`Turno: Jugador ${turn+1}`, colors[turn]);
 
-    function updateUI(g){
-      const turn=g.turn||0;
-      const st=document.getElementById('status');
-      st.textContent=`Turno: Jugador ${turn+1}`;
-      st.style.backgroundColor=colors[turn];
-
-      const counts=[0,0,0,0];
-      Object.values(g.trails||{}).forEach(p=>counts[p]++);
-      document.getElementById('scores').innerHTML=counts.map((v,i)=
+      // Scores
+      const counts = [0,0,0,0];
+      Object.values(g.trails || {}).forEach(p => counts[p]++);
+      document.getElementById('scores').innerHTML = counts.map((v,i) =>
         `<div class="score"><div class="dot" style="background:${colors[i]}"></div>J${i+1}: ${v}</div>`
       ).join('');
 
-      document.querySelectorAll('.cell').forEach(cell=>{
-        cell.innerHTML=''; cell.classList.remove('selected','move-anim');
-        const coord=cell.dataset.coord;
-        if(g.trails?.[coord]!=null){
-          const p=g.trails[coord];
-          const dot=document.createElement('div'); dot.className='trail'; dot.style.backgroundColor=colors[p]; cell.append(dot);
+      // Render celdas
+      document.querySelectorAll('.cell').forEach(cell => {
+        const coord = cell.dataset.coord;
+        cell.innerHTML = '';
+        cell.classList.remove('selected','move-anim');
+        // Traza
+        if (g.trails?.[coord] != null) {
+          const p = g.trails[coord];
+          const dot = document.createElement('div'); dot.className = 'trail';
+          dot.style.backgroundColor = colors[p]; cell.append(dot);
         }
-        if(g.pieces?.[coord]!=null){
-          const p=g.pieces[coord];
-          const t=document.createElement('span'); t.className='token'; t.textContent='♟'; t.style.color=colors[p]; cell.append(t);
+        // Ficha
+        if (g.pieces?.[coord] != null) {
+          const p = g.pieces[coord];
+          const t = document.createElement('span'); t.className = 'token'; t.textContent = '♟';
+          t.style.color = colors[p]; cell.append(t);
         }
       });
 
-      const alive=new Set(Object.values(g.pieces));
-      if(alive.size<=1){
-        const traceCounts=[0,0,0,0];
-        Object.values(g.trails||{}).forEach(p=>traceCounts[p]++);
-        const max=Math.max(...traceCounts);
-        const winner=traceCounts.indexOf(max);
-        setTimeout(()=>{
+      // Fin de juego
+      const alive = new Set(Object.values(g.pieces));
+      if (alive.size <= 1) {
+        const traceCounts = [0,0,0,0];
+        Object.values(g.trails || {}).forEach(p => traceCounts[p]++);
+        const max = Math.max(...traceCounts);
+        const winner = traceCounts.indexOf(max);
+        setTimeout(() => {
           alert(`¡Gana el Jugador ${winner+1}!`);
           gameRef.set({ turn:0, pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3}, trails:{} });
-        },100);
+        }, 200);
       }
     }
 
-    function handleClick(cell){
-      const src=cell.dataset.coord;
-      gameRef.once('value').then(snap=>{
-        const g=snap.val(); const turn=g.turn||0;
-        if(!selected){ if(g.pieces?.[src]===turn){ selected=src; cell.classList.add('selected'); }} else { attemptMove(selected,src); selected=null; }
-      });
+    function handleClick(cell) {
+      const src = cell.dataset.coord;
+      gameRef.once('value')
+        .then(snap => {
+          const g = snap.val(); const turn = g.turn || 0;
+          if (!selected) {
+            if (g.pieces?.[src] === turn) {
+              selected = src; cell.classList.add('selected');
+            }
+          } else {
+            attemptMove(selected, src);
+            selected = null;
+          }
+        })
+        .catch(err => updateStatus('Error click: ' + err.message, '#e74c3c'));
     }
 
-    function attemptMove(src,dest){
-      gameRef.transaction(g=>{
-        if(!g) return;
-        const turn=g.turn||0;
-        if(g.pieces[src]!==turn) return;
-        const [sr,sc]=src.split(',').map(Number);
-        const [dr,dc]=dest.split(',').map(Number);
-        const ddr=Math.abs(dr-sr), ddc=Math.abs(dc-sc);
-        if(!(ddr<=1&&ddc<=1&&(ddr+ddc>0))) return;
-        g.trails=g.trails||{}; g.trails[src]=turn;
-        if(g.pieces[dest]!=null&&g.pieces[dest]!=turn) delete g.pieces[dest];
-        delete g.pieces[src]; g.pieces[dest]=turn;
-        Object.entries({...g.pieces}).forEach(([c,p])=>{
-          let trapped=true; const [r,cc]=c.split(',').map(Number);
-          for(let dr=-1;dr<=1;dr++){ for(let dc=-1;dc<=1;dc++){ if(dr===0&&dc===0) continue;
-              const nr=r+dr,nc=cc+dc,key=`${nr},${nc}`;
-              if(nr<0||nc<0||nr>=SIZE||nc>=SIZE){trapped=false;break;}
-              if(!(g.pieces[key]||g.trails[key])){trapped=false;break;}
-            } if(!trapped) break; }
-          if(trapped) delete g.pieces[c];
+    function attemptMove(src, dest) {
+      gameRef.transaction(g => {
+        if (!g) return;
+        const turn = g.turn || 0;
+        if (g.pieces[src] !== turn) return;
+        const [sr,sc] = src.split(',').map(Number);
+        const [dr,dc] = dest.split(',').map(Number);
+        const ddr = Math.abs(dr - sr), ddc = Math.abs(dc - sc);
+        if (!(ddr <= 1 && ddc <= 1 && (ddr + ddc > 0))) return;
+        // Dejar traza
+        g.trails = g.trails || {};
+        g.trails[src] = turn;
+        // Captura
+        if (g.pieces[dest] != null && g.pieces[dest] !== turn) delete g.pieces[dest];
+        // Mover
+        delete g.pieces[src];
+        g.pieces[dest] = turn;
+        // Eliminar rodeados
+        Object.entries({ ...g.pieces }).forEach(([c,p]) => {
+          let trapped = true;
+          const [r,cc] = c.split(',').map(Number);
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              if (dr === 0 && dc === 0) continue;
+              const nr = r + dr, nc = cc + dc, key = `${nr},${nc}`;
+              if (nr < 0 || nc < 0 || nr >= SIZE || nc >= SIZE) { trapped = false; break; }
+              if (!(g.pieces[key] || g.trails[key])) { trapped = false; break; }
+            }
+            if (!trapped) break;
+          }
+          if (trapped) delete g.pieces[c];
         });
-        let next=(turn+1)%4, alive=new Set(Object.values(g.pieces));
-        while(!alive.has(next)&&alive.size>1) next=(next+1)%4;
-        g.turn=next; g._moved=dest; return g;
-      },(e,c,snap)=>{ if(c&&snap.val()?._moved){ const m=snap.val()._moved; const cell=document.querySelector(`[data-coord='${m}']`); if(cell) cell.classList.add('move-anim'); gameRef.child('_moved').remove(); } });
+        // Siguiente turno
+        let next = (turn + 1) % 4;
+        const alive = new Set(Object.values(g.pieces));
+        while (!alive.has(next) && alive.size > 1) next = (next + 1) % 4;
+        g.turn = next;
+        // Animación
+        g._moved = dest;
+        return g;
+      }, (err, committed, snap) => {
+        if (err) updateStatus('Error move: ' + err.message, '#e74c3c');
+        if (committed && snap.val()?._moved) {
+          const m = snap.val()._moved;
+          const cell = document.querySelector(`[data-coord='${m}']`);
+          if (cell) cell.classList.add('move-anim');
+          gameRef.child('_moved').remove();
+        }
+      });
     }
   </script>
 </body>
