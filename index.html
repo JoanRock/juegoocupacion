@@ -154,7 +154,8 @@
       const db = firebase.database();
       // Aquí deberías incluir la lógica de inicialización y sincronización del juego
 
-      // Lógica para declarar ganador si se llena el tablero
+
+      // AÑADIDO: lógica de detección de tablero lleno
       function updateUI(game) {
         const totalCeldas = 8 * 8;
         const ocupadas = Object.keys(game.pieces || {}).length + Object.keys(game.trails || {}).length;
@@ -178,10 +179,11 @@
               trails: {}
             });
           }, 200);
+          return;
         }
+
+        // Aquí va el resto del renderizado del tablero y actualización de estado
       }
-      // AÑADIDO: lógica de detección de tablero lleno
-      function updateUI(game) {
         const totalCeldas = 8 * 8;
         const ocupadas = Object.keys(game.pieces || {}).length + Object.keys(game.trails || {}).length;
 
