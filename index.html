@@ -83,19 +83,8 @@
       border-radius: 4px;
       transition: transform 0.2s;
     }
-    .cell:hover {
-      transform: scale(1.05);
-    }
-    .cell.selected {
-      outline: 2px solid var(--accent);
-    }
-    .cell.move-anim {
-      animation: flash 0.4s ease-out;
-    }
-    @keyframes flash {
-      from { background: var(--accent); }
-      to { background: var(--cell-bg); }
-    }
+    .cell:hover { transform: scale(1.05); }
+    .cell.selected { outline: 2px solid var(--accent); }
     .trail {
       position: absolute;
       width: 0.6rem;
@@ -103,23 +92,9 @@
       border-radius: 50%;
       opacity: var(--trail-alpha);
     }
-    .token {
-      font-size: var(--token-size);
-      line-height: 1;
-      z-index: 1;
-    }
-    input,
-    button {
-      font-size: 0.9rem;
-      padding: 0.4rem 0.8rem;
-      border-radius: 4px;
-      border: none;
-    }
-    button {
-      background: var(--accent);
-      color: #fff;
-      cursor: pointer;
-    }
+    .token { font-size: var(--token-size); line-height: 1; z-index: 1; }
+    input, button { font-size: 0.9rem; padding: 0.4rem 0.8rem; border-radius: 4px; border: none; }
+    button { background: var(--accent); color: #fff; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -137,6 +112,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script defer>
     window.addEventListener('load', () => {
+      // Configuración Firebase
       const firebaseConfig = {
         apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
         authDomain: "juego-ocupacion.firebaseapp.com",
@@ -148,128 +124,123 @@
       };
       firebase.initializeApp(firebaseConfig);
       const db = firebase.database();
-      const gameRef = db.ref("games/partida1");
+      const gameRef = db.ref('games/partida1');
+      const connectedRef = db.ref('.info/connected');
 
-      let playerId = localStorage.getItem("playerId");
-      if (!playerId) {
-        playerId = crypto.randomUUID();
-        localStorage.setItem("playerId", playerId);
-      }
-
-      const statusEl = document.getElementById("status");
-      const playerIndicator = document.getElementById("player-indicator");
-      const boardEl = document.getElementById("board");
-
-      // Registrar presencia
-      const presenceRef = db.ref("presence/" + playerId);
-      presenceRef.set(true);
-      presenceRef.onDisconnect().remove();
-
-      // Asignar número de jugador
-      const playersRef = gameRef.child("players");
-      let playerIndex = null;
-
-      playersRef.once("value", snap => {
-        const players = snap.val() || {};
-        for (let i = 0; i < 4; i++) {
-          if (!players[i]) {
-            playersRef.child(i).set(playerId);
-            playerIndex = i;
-            break;
-          } else if (players[i] === playerId) {
-            playerIndex = i;
-            break;
-          }
-        }
-        if (playerIndex !== null) {
-          playerIndicator.textContent = `Eres: Jugador ${playerIndex + 1}`;
-        }
+      // Gestión conexión
+      const statusEl = document.getElementById('status');
+      connectedRef.on('value', snap => {
+        statusEl.textContent = snap.val() ? 'Conectado' : 'Desconectado';
       });
 
-      gameRef.on("value", (snap) => {
-        const game = snap.val();
-        if (!game) return;
+      // ID y asignación de jugador
+      let playerId = localStorage.getItem('playerId');
+      if (!playerId) { playerId = crypto.randomUUID(); localStorage.setItem('playerId', playerId); }
+      const presenceRef = db.ref('presence/' + playerId);
+      presenceRef.set(true); presenceRef.onDisconnect().remove();
 
-        boardEl.innerHTML = "";
+      const playerIndicator = document.getElementById('player-indicator');
+      const nameInput = document.getElementById('name-input');
+      const nameBtn = document.getElementById('name-btn');
+      const scoresEl = document.getElementById('scores');
+      let playerIndex = null;
+
+      // Guardar nombre
+      nameBtn.onclick = () => {
+        const name = nameInput.value.trim();
+        if (!name || playerIndex === null) return;
+        gameRef.child('playerNames/' + playerIndex).set(name);
+      };
+
+      // Asignar índice de jugador
+      gameRef.child('players').transaction(current => {
+        const players = current || {};
+        for (let i = 0; i < 4; i++) {
+          if (!players[i]) { players[i] = playerId; playerIndex = i; break; }
+          if (players[i] === playerId) { playerIndex = i; break; }
+        }
+        return players;
+      }).then(() => {
+        playerIndicator.textContent = `Eres: Jugador ${playerIndex + 1}`;
+      });
+
+      // Render y lógica de juego
+      gameRef.on('value', snap => {
+        const game = snap.val(); if (!game) return;
+        const boardEl = document.getElementById('board'); boardEl.innerHTML = '';
+
+        // Calcular puntuaciones
+        const names = game.playerNames || {};
+        const counts = [0, 0, 0, 0];
+        Object.values(game.trails || {}).forEach(p => counts[p]++);
+
+        // Mostrar scores
+        scoresEl.innerHTML = '';
+        counts.forEach((pts, i) => {
+          const div = document.createElement('div'); div.className = 'score';
+          div.textContent = `${names[i] || 'Jugador ' + (i+1)}: ${pts}`;
+          scoresEl.appendChild(div);
+        });
+
+        // Render celdas
+        Object.keys(game.pieces || {}).concat(Object.keys(game.trails || {})).length;
         for (let r = 0; r < 8; r++) {
           for (let c = 0; c < 8; c++) {
-            const cell = document.createElement("div");
-            cell.className = "cell";
+            const cell = document.createElement('div'); cell.className = 'cell';
             const key = `${r},${c}`;
-
-            if (game.trails && game.trails[key] != null) {
-              const trail = document.createElement("div");
-              trail.className = "trail";
+            // Trail
+            if (game.trails?.[key] != null) {
+              const trail = document.createElement('div'); trail.className = 'trail';
               trail.style.backgroundColor = `hsl(${game.trails[key]*90}, 70%, 60%)`;
               cell.appendChild(trail);
             }
-
-            if (game.pieces && game.pieces[key] != null) {
-              const token = document.createElement("span");
-              token.className = "token";
-              token.textContent = "♟";
+            // Piece
+            if (game.pieces?.[key] != null) {
+              const token = document.createElement('span'); token.className = 'token'; token.textContent = '♟';
               token.style.color = `hsl(${game.pieces[key]*90}, 70%, 50%)`;
               cell.appendChild(token);
-
               if (game.turn === game.pieces[key] && game.pieces[key] === playerIndex) {
-                cell.onclick = () => {
-                  localStorage.setItem("selected", key);
-                  statusEl.textContent = `Seleccionado: ${key}`;
-                };
+                cell.onclick = () => { localStorage.setItem('selected', key); };
               }
             } else {
               cell.onclick = () => {
-                const selected = localStorage.getItem("selected");
-                if (!selected) return;
-
-                const [sx, sy] = selected.split(',').map(Number);
-                const [dx, dy] = [r, c];
-                const dxDiff = Math.abs(dx - sx);
-                const dyDiff = Math.abs(dy - sy);
-
-                if (dxDiff <= 1 && dyDiff <= 1 && (dxDiff + dyDiff) > 0) {
-                  gameRef.transaction(game => {
-                    if (!game || !game.pieces || game.pieces[selected] !== playerIndex || game.turn !== playerIndex) return;
-                    game.trails = game.trails || {};
-                    game.trails[selected] = playerIndex;
-                    delete game.pieces[selected];
-                    if (game.pieces[key] != null) delete game.pieces[key];
-                    game.pieces[key] = playerIndex;
-                    game.turn = (playerIndex + 1) % 4;
-                    return game;
-                  });
-                  localStorage.removeItem("selected");
+                const sel = localStorage.getItem('selected'); if (!sel) return;
+                const [sx, sy] = sel.split(',').map(Number), [dx, dy] = [r, c];
+                if (Math.abs(dx-sx)<=1 && Math.abs(dy-sy)<=1 && (dx+dy)!=(sx+sy)) {
+                  gameRef.transaction(g => {
+                    if (!g || g.pieces?.[sel]!==playerIndex || g.turn!==playerIndex) return;
+                    g.trails = g.trails || {}; g.trails[sel] = playerIndex;
+                    delete g.pieces[sel]; if (g.pieces[key]!=null) delete g.pieces[key];
+                    g.pieces[key] = playerIndex;
+                    g.turn = (playerIndex + 1) % 4;
+                    return g;
+                  }); localStorage.removeItem('selected');
                 }
               };
             }
-
             boardEl.appendChild(cell);
           }
         }
 
-        const totalCeldas = 64;
-        const ocupadas = Object.keys(game.pieces || {}).length + Object.keys(game.trails || {}).length;
-        if (ocupadas === totalCeldas) {
-          const puntuaciones = [0, 0, 0, 0];
-          Object.values(game.trails || {}).forEach(j => puntuaciones[j]++);
-          const maxPuntos = Math.max(...puntuaciones);
-          const ganadores = puntuaciones.map((v, i) => v === maxPuntos ? i : null).filter(v => v !== null);
+        // Fin de juego
+        const total = 64;
+        const occupied = Object.keys(game.trails || {}).length + Object.keys(game.pieces || {}).length;
+        if (occupied === total) {
+          const max = Math.max(...counts);
+          const winners = counts.map((v,i)=> v===max?i:null).filter(v=>v!=null);
           setTimeout(() => {
-            if (ganadores.length > 1) {
-              alert(`Empate entre ${ganadores.map(i => `Jugador ${i + 1}`).join(' y ')}`);
-            } else {
-              alert(`¡Gana Jugador ${ganadores[0] + 1}!`);
-            }
+            alert(winners.length>1 ? `Empate entre ${winners.map(i=>names[i]||'Jugador '+(i+1)).join(' y ')}` : `¡Gana ${names[winners[0]]||'Jugador '+(winners[0]+1)}!`);
             gameRef.set({
               turn: 0,
-              pieces: { '0,0': 0, '0,7': 1, '7,0': 2, '7,7': 3 },
+              pieces: {'0,0':0,'0,7':1,'7,0':2,'7,7':3},
               trails: {},
-              players: game.players
+              players: game.players,
+              playerNames: names
             });
           }, 200);
         }
 
-        statusEl.textContent = `Turno de: Jugador ${game.turn + 1}`;
+        statusEl.textContent = `Turno de: ${names[game.turn]||'Jugador '+(game.turn+1)}`;
       });
     });
   </script>
