@@ -2,9 +2,6 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ocupa Casillas Online</title>
   <style>
@@ -19,22 +16,23 @@
       --sound-vol: 0.4;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 1rem; background: var(--bg-page); color: #fff; font-family: var(--font); display: flex; flex-direction: column; align-items: center; }
-    h1 { font-size: 1.75rem; margin-bottom: 1rem; }
-    #player-indicator { margin-bottom: 0.5rem; font-size: 1.2rem; font-weight: bold; }
-    #name-form { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-    #status { padding: 0.5rem 1rem; border-radius: 6px; margin-bottom: 1rem; text-align: center; background: var(--panel-bg); }
-    #scores { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-    .score { background: var(--panel-bg); padding: 0.4rem 0.8rem; border-radius: 4px; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; }
-    #board { display: grid; grid-template-columns: repeat(8, 1fr); width: 100%; max-width: 400px; aspect-ratio: 1; gap: 2px; background: var(--panel-bg); padding: 3px; border-radius: 6px; }
-    .cell { background: var(--cell-bg); position: relative; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: transform 0.2s; }
-    .cell:hover { transform: scale(1.05); }
-    .cell.selected { outline: 2px solid var(--accent); }
-    @keyframes flash { from { background: var(--accent); } to { background: var(--cell-bg); } }
-    .cell.move-anim { animation: flash 0.4s ease-out; }\n    .trail { position: absolute; width: 0.6rem; height: 0.6rem; border-radius: 50%; opacity: var(--trail-alpha); }
-    .token { font-size: var(--token-size); line-height: 1; z-index: 1; }
-    input, button { font-size: 0.9rem; padding: 0.4rem 0.8rem; border-radius: 4px; border: none; }
-    button { background: var(--accent); color: #fff; cursor: pointer; }
+    body { margin:0; padding:1rem; background:var(--bg-page); color:#fff; font-family:var(--font); display:flex; flex-direction:column; align-items:center; }
+    h1 { font-size:1.75rem; margin-bottom:1rem; }
+    #player-indicator { margin-bottom:0.5rem; font-size:1.2rem; font-weight:bold; }
+    #name-form { display:flex; gap:0.5rem; margin-bottom:1rem; }
+    #status { padding:0.5rem 1rem; border-radius:6px; margin-bottom:1rem; text-align:center; background:var(--panel-bg); }
+    #scores { display:flex; gap:0.5rem; margin-bottom:1rem; }
+    .score { background:var(--panel-bg); padding:0.4rem 0.8rem; border-radius:4px; display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; }
+    #board { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); width:100%; max-width:400px; aspect-ratio:1; gap:2px; background:var(--panel-bg); padding:3px; border-radius:6px; }
+    .cell { background:var(--cell-bg); position:relative; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:4px; transition:transform 0.2s; }
+    .cell:hover { transform:scale(1.05); }
+    .cell.selected { outline:2px solid var(--accent); }
+    @keyframes flash { from{background:var(--accent);} to{background:var(--cell-bg);} }
+    .cell.move-anim { animation:flash 0.4s ease-out; }
+    .trail { position:absolute; width:0.6rem; height:0.6rem; border-radius:50%; opacity:var(--trail-alpha); }
+    .token { font-size:var(--token-size); line-height:1; z-index:1; }
+    input,button { font-size:0.9rem; padding:0.4rem 0.8rem; border-radius:4px; border:none; }
+    button { background:var(--accent); color:#fff; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -52,135 +50,97 @@
   <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script defer>
     window.addEventListener('load', () => {
-      // Prevent caching of inline scripts
-      // Session persistence
       let sessionId = localStorage.getItem('ocupaSession');
-      if (!sessionId) { sessionId = crypto.randomUUID(); localStorage.setItem('ocupaSession', sessionId); }
-
-      // Firebase init
+      if (!sessionId) {
+        sessionId = crypto.randomUUID();
+        localStorage.setItem('ocupaSession', sessionId);
+      }
       firebase.initializeApp({
-        apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
-        authDomain: "juego-ocupacion.firebaseapp.com",
-        databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "juego-ocupacion",
-        storageBucket: "juego-ocupacion.appspot.com",
-        messagingSenderId: "567270483949",
-        appId: "1:567270483949:web:7b5150bd422b5175a8e4"
+        apiKey:"AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
+        authDomain:"juego-ocupacion.firebaseapp.com",
+        databaseURL:"https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId:"juego-ocupacion",
+        storageBucket:"juego-ocupacion.appspot.com",
+        messagingSenderId:"567270483949",
+        appId:"1:567270483949:web:7b5150bd422b5175a8e4"
       });
       const db = firebase.database();
       const gameRef = db.ref('games/partida1');
       const playersRef = gameRef.child('players');
       const namesRef = gameRef.child('names');
-      const presenceRef = db.ref('presence/' + sessionId);
+      const presenceRef = db.ref('presence/'+sessionId);
       presenceRef.set(true);
       presenceRef.onDisconnect().remove();
-      
+
       const SIZE = 8;
-      let playerIndex = null, selected = null;
-      const colors = ['#e74c3c','#2ecc71','#3498db','#f1c40f'];
-      let players = {}, namesMap = {};
+      let playerIndex=null, selected=null;
+      const colors=['#e74c3c','#2ecc71','#3498db','#f39c12'];
+      let players={}, namesMap={};
 
-      playersRef.on('value', snap => {
-        players = snap.val() || {};
-        assignPlayer();
-      });
-      namesRef.on('value', snap => { namesMap = snap.val() || {}; updateScoreUI(); });
+      playersRef.on('value', snap=>{ players=snap.val()||{}; assignPlayer(); });
+      namesRef.on('value', snap=>{ namesMap=snap.val()||{}; updateScoreUI(); });
 
-      function assignPlayer() {
-        if (playerIndex === null) {
-          for (const [i,id] of Object.entries(players)) {
-            if (id === sessionId) { playerIndex = Number(i); break; }
+      function assignPlayer(){
+        if(playerIndex===null){
+          for(const [i,id] of Object.entries(players)) if(id===sessionId) playerIndex=Number(i);
+          if(playerIndex===null && Object.keys(players).length<4){
+            const next=Object.keys(players).reduce((m,k)=>Math.max(m,Number(k)),-1)+1;
+            playerIndex=next; playersRef.child(next).set(sessionId);
           }
-          if (playerIndex === null && Object.keys(players).length < 4) {
-            const next = Object.keys(players).reduce((m,k) => Math.max(m, Number(k)), -1) + 1;
-            playerIndex = next;
-            playersRef.child(next).set(sessionId);
-          }
-          if (playerIndex !== null) {
-            document.getElementById('player-indicator').textContent = `Eres: Jugador ${playerIndex+1}`;
-            document.getElementById('name-form').style.display = 'flex';
-            namesRef.child(playerIndex).once('value').then(s => {
-              if (s.val()) document.getElementById('name-input').value = s.val();
-            });
+          if(playerIndex!==null){
+            document.getElementById('player-indicator').textContent=`Eres: Jugador ${playerIndex+1}`;
+            document.getElementById('name-form').style.display='flex';
+            namesRef.child(playerIndex).once('value').then(snap=>{ if(snap.val()) document.getElementById('name-input').value=snap.val(); });
             initGame();
           }
         }
       }
-      document.getElementById('name-btn').onclick = () => {
-        const name = document.getElementById('name-input').value.trim() || `Jugador ${playerIndex+1}`;
+      document.getElementById('name-btn').onclick=()=>{
+        const name=document.getElementById('name-input').value.trim()||`Jugador ${playerIndex+1}`;
         namesRef.child(playerIndex).set(name);
       };
 
-      const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-      function playTone(freq) {
-        const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        gain.gain.setValueAtTime(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sound-vol')), audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
-        osc.frequency.value = freq; osc.start(); osc.stop(audioCtx.currentTime + 0.2);
-      }
-      function hexFade(hex, a) {
-        const r = parseInt(hex.substr(1,2),16), g = parseInt(hex.substr(3,2),16), b = parseInt(hex.substr(5,2),16);
-        return `rgba(${r},${g},${b},${a})`;
-      }
-      function varGet(n) { return parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n)); }
+      const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+      function playTone(freq){/*...*/}
+      function hexFade(hex,a){/*...*/}
+      function varGet(n){return parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n));}
 
-      function initGame() {
-        const boardEl = document.getElementById('board'); boardEl.innerHTML = '';
-        for (let r=0; r<SIZE; r++) for (let c=0; c<SIZE; c++) {
-          const cell = document.createElement('div');
-          cell.className = 'cell'; cell.dataset.coord = `${r},${c}`;
-          cell.onclick = () => handleClick(cell);
-          boardEl.appendChild(cell);
-        }
-        gameRef.child('turn').once('value').then(s => {
-          if (!s.exists()) {
-            gameRef.set({
-              turn: 0,
-              pieces: {'0,0':0,'7,7':1,'0,7':2,'7,0':3},
-              trails: {},
-              players: players,
-              names: namesMap
-            });
-          }
-        });
-        db.ref('.info/connected').on('value', s => updateStatus(s.val() ? 'Conectado' : 'Sin conexión', s.val() ? colors[playerIndex] : '#e74c3c'));
-        gameRef.on('value', s => updateUI(s.val()));
+      function initGame(){
+        const boardEl=document.getElementById('board'); boardEl.innerHTML='';
+        for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){const cell=document.createElement('div');cell.className='cell';cell.dataset.coord=`${r},${c}`;cell.onclick=()=>handleClick(cell);boardEl.append(cell);}      
+        gameRef.child('turn').once('value').then(snap=>{ if(!snap.exists()) gameRef.set({ turn:0, pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3}, trails:{}, players:players, names:namesMap }); });
+        db.ref('.info/connected').on('value',snap=>updateStatus(snap.val()?'Conectado':'Sin conexión',snap.val()?colors[playerIndex]:'#e74c3c'));
+        gameRef.on('value',snap=>{ if(snap.val()) updateUI(snap.val()); });
       }
-      function updateStatus(txt, bg) {
-        const st = document.getElementById('status'); st.textContent = txt; if (bg) st.style.backgroundColor = bg;
-      }
-      function updateUI(g) {
-        const turn = g.turn || 0;
-        namesRef.child(turn).once('value').then(s => updateStatus(`Turno: ${s.val()||`Jugador ${turn+1}`}`, colors[turn]));
+      function updateStatus(txt,bg){ const st=document.getElementById('status'); st.textContent=txt; if(bg) st.style.backgroundColor=bg; }
+
+      function updateUI(g){
+        // pintar y estado
+        const turn=g.turn||0;
+        namesRef.child(turn).once('value').then(snap=>updateStatus(`Turno: ${snap.val()||`Jugador ${turn+1}`}`,colors[turn]));
         updateScoreUI(g);
-        document.querySelectorAll('.cell').forEach(cell => {
-          const coord = cell.dataset.coord; cell.innerHTML = '';
-          cell.classList.remove('selected','move-anim');
-          if (g.trails?.[coord]!=null) cell.style.backgroundColor = hexFade(colors[g.trails[coord]], varGet('--trail-alpha')); else cell.style.backgroundColor='var(--cell-bg)';
-          if (g.pieces?.[coord]!=null) {
-            const p=g.pieces[coord]; const t=document.createElement('span'); t.className='token'; t.textContent='♟'; t.style.color=colors[p]; cell.append(t);
-          }
-        });
-        const alive = new Set(Object.values(g.pieces)); if (alive.size <= 1) {
-          const counts = [0,0,0,0]; Object.values(g.trails||{}).forEach(p=>counts[p]++);
-          const w = counts.indexOf(Math.max(...counts)); setTimeout(() => {
-            namesRef.child(w).once('value').then(snap=>alert(`¡Gana ${snap.val()||`Jugador ${w+1}`}!`));
+        document.querySelectorAll('.cell').forEach(cell=>{const k=cell.dataset.coord;cell.innerHTML='';cell.classList.remove('selected','move-anim');if(g.trails?.[k]!=null)cell.style.backgroundColor=hexFade(colors[g.trails[k]],varGet('--trail-alpha'));else cell.style.backgroundColor='var(--cell-bg)';if(g.pieces?.[k]!=null){const t=document.createElement('span');t.className='token';t.textContent='♟';t.style.color=colors[g.pieces[k]];cell.append(t);}});
+
+        // nueva condición: tablero completo → definir ganador por trazas
+        const totalFilled = Object.keys(g.trails||{}).length + Object.keys(g.pieces||{}).length;
+        if(totalFilled === SIZE*SIZE){
+          const counts=[0,0,0,0]; Object.values(g.trails||{}).forEach(p=>counts[p]++);
+          const maxCount=Math.max(...counts);
+          const winners=counts.map((c,i)=>c===maxCount?i:null).filter(i=>i!=null);
+          setTimeout(()=>{
+            if(winners.length>1) alert(`Empate entre ${winners.map(i=>namesMap[i]||`Jugador ${i+1}`).join(' y ')} con ${maxCount} trazas`);
+            else alert(`¡Gana ${namesMap[winners[0]]||`Jugador ${winners[0]+1}`} con ${maxCount} trazas!`);
             gameRef.update({ turn:0, pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3}, trails:{} });
           },200);
+          return;
         }
-      }
-      function updateScoreUI(g={trails:{}}) {
-        const counts=[0,0,0,0]; Object.values(g.trails||{}).forEach(p=>counts[p]++);
-        const scoresEl=document.getElementById('scores'); scoresEl.innerHTML=''; counts.forEach((v,i)=>{
-          const div=document.createElement('div'); div.className='score';
-          const dot=document.createElement('span'); dot.className='dot'; dot.style.background=colors[i];
-          const name=namesMap[i]||`Jugador ${i+1}`; div.append(dot, `${name}: ${v}`);
-          scoresEl.append(div);
-        });
-      }
-      function handleClick(cell){ if(playerIndex===null)return; gameRef.once('value').then(snap=>{ const g=snap.val(); if(g.turn!==playerIndex) return; const src=cell.dataset.coord; if(!selected){ if(g.pieces?.[src]===playerIndex){ selected=src; cell.classList.add('selected'); }} else { attemptMove(selected, src); selected=null; } }); }
-      function attemptMove(src,dest){ gameRef.transaction(g=>{ if(!g) return; const turn=g.turn||0; if(g.pieces[src]!==turn) return; const [sr,sc]=src.split(',').map(Number),[dr,dc]=dest.split(',').map(Number); const ddr=Math.abs(dr-sr), ddc=Math.abs(dc-sc); if(!(ddr<=1&&ddc<=1&&(ddr+ddc>0))) return; g.trails=g.trails||{}; g.trails[src]=turn; if(g.pieces[dest]!=null&&g.pieces[dest]!=turn) delete g.pieces[dest]; delete g.pieces[src]; g.pieces[dest]=turn; Object.entries({...g.pieces}).forEach(([c,p])=>{ let trapped=true; const [r,cc]=c.split(',').map(Number); outer: for(let dy=-1;dy<=1;dy++){ for(let dx=-1;dx<=1;dx++){ if(dx===0&&dy===0) continue; const nr=r+dy, nc=cc+dx, key=`${nr},${nc}`; if(nr<0||nc<0||nr>=SIZE||nc>=SIZE){ trapped=false; break outer; } if(!(g.pieces[key]||g.trails[key])){ trapped=false; break outer; } }} if(trapped) delete g.pieces[c]; }); let next=(turn+1)%4; const aliveSet=new Set(Object.values(g.pieces)); while(!aliveSet.has(next)&&aliveSet.size>1) next=(next+1)%4; g.turn=next; g._moved=dest; return g; },(err,comm,snap)=>{ if(err) console.error(err); if(comm&&snap.val()?._moved){ playTone(220+playerIndex*110); document.querySelector(`[data-coord='${snap.val()._moved}']`)?.classList.add('move-anim'); gameRef.child('_moved').remove(); } }); }
+
+        // fin de partida por supervivencia
+        const alive=new Set(Object.values(g.pieces)); if(alive.size<=1){ const counts=[0,0,0,0];Object.values(g.trails||{}).forEach(p=>counts[p]++);const w=counts.indexOf(Math.max(...counts));setTimeout(()=>{alert(`¡Gana ${namesMap[w]||`Jugador ${w+1}`}!`);gameRef.update({turn:0,pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3},trails:{}});},200);}      }
+
+      function updateScoreUI(g={trails:{}}){ const cnt=[0,0,0,0];Object.values(g.trails||{}).forEach(p=>cnt[p]++);const el=document.getElementById('scores');el.innerHTML='';cnt.forEach((v,i)=>{const d=document.createElement('div');d.className='score';const dot=document.createElement('span');dot.className='dot';dot.style.background=colors[i];d.append(dot,`${namesMap[i]||`Jugador ${i+1}`}: ${v}`);el.append(d);});}
+      function handleClick(cell){ if(playerIndex===null)return;gameRef.once('value').then(snap=>{const g=snap.val();if(g.turn!==playerIndex)return;const src=cell.dataset.coord;if(!selected){if(g.pieces?.[src]===playerIndex){selected=src;cell.classList.add('selected');}}else{attemptMove(selected,src);selected=null;}});}      
+      function attemptMove(src,dest){gameRef.transaction(g=>{if(!g)return;const turn=g.turn||0;if(g.pieces[src]!==turn)return;const [sr,sc]=src.split(',').map(Number),[dr,dc]=dest.split(',').map(Number);const ddr=Math.abs(dr-sr),ddc=Math.abs(dc-sc);if(!(ddr<=1&&ddc<=1&&(ddr+ddc>0)))return;g.trails=g.trails||{};g.trails[src]=turn;if(g.pieces[dest]!=null&&g.pieces[dest]!=turn)delete g.pieces[dest];delete g.pieces[src];g.pieces[dest]=turn;Object.entries({...g.pieces}).forEach(([c,p])=>{let trapped=true;const [r,cc]=c.split(',').map(Number);outer:for(let dy=-1;dy<=1;dy++){for(let dx=-1;dx<=1;dx++){if(dx===0&&dy===0)continue;const nr=r+dy,nc=cc+dx,key=`${nr},${nc}`;if(nr<0||nc<0||nr>=SIZE||nc>=SIZE){trapped=false;break outer;}if(!(g.pieces[key]||g.trails[key])){trapped=false;break outer;}}}if(trapped)delete g.pieces[c];});let next=(turn+1)%4;const alive=new Set(Object.values(g.pieces));while(!alive.has(next)&&alive.size>1)next=(next+1)%4;g.turn=next;g._moved=dest;return g;},(err,comm,snap)=>{if(err)console.error(err);if(comm&&snap.val()?._moved){playTone(220+playerIndex*110);document.querySelector(`[data-coord='${snap.val()._moved}']`)?.classList.add('move-anim');gameRef.child('_moved').remove();}});}    
     });
   </script>
 </body>
