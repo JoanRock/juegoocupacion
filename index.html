@@ -16,75 +16,74 @@
       --sound-vol: 0.4;
     }
     * { box-sizing: border-box; }
-    body { margin:0; padding:20px; background:var(--bg-page); color:#fff; font-family:var(--font); display:flex; flex-direction:column; align-items:center; }
-    h1 { font-size:2rem; margin-bottom:8px; }
-    #player-indicator { margin-bottom:12px; font-size:1.2rem; font-weight:bold; }
-    #name-form { margin-bottom:12px; }
-    #status { padding:8px 16px; border-radius:6px; margin-bottom:12px; min-width:220px; text-align:center; color:#fff; background:var(--panel-bg); }
-    #scores { display:flex; gap:12px; margin-bottom:12px; }
-    .score { background:var(--panel-bg); padding:6px 10px; border-radius:4px; display:flex; align-items:center; gap:6px; font-size:0.9rem; }
-    .dot { width:12px; height:12px; border-radius:50%; }
-    #board { display:grid; grid-template:repeat(8,50px)/repeat(8,50px); gap:2px; background:var(--panel-bg); padding:4px; border-radius:6px; }
-    .cell { background:var(--cell-bg); position:relative; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:4px; transition:transform .2s; }
+    body { margin:0; padding:1rem; background:var(--bg-page); color:#fff; font-family:var(--font); display:flex; flex-direction:column; align-items:center; }
+    h1 { font-size:1.75rem; margin-bottom:1rem; }
+    #lobby, #game { width:100%; max-width:400px; }
+    #lobby { text-align:center; padding:1rem; background:var(--panel-bg); border-radius:6px; margin-bottom:1rem; }
+    #player-indicator { margin-bottom:0.5rem; font-size:1.2rem; font-weight:bold; text-align:center; }
+    #presence { display:flex; flex-wrap:wrap; justify-content:center; gap:0.5rem; margin-bottom:1rem; }
+    .presence { display:inline-flex; align-items:center; gap:0.3rem; font-size:0.9rem; }
+    .presence .dot { width:0.8rem; height:0.8rem; border-radius:50%; }
+    #name-form { display:flex; justify-content:center; gap:0.5rem; margin-bottom:1rem; }
+    #status { padding:0.5rem 1rem; border-radius:6px; margin-bottom:1rem; text-align:center; background:var(--panel-bg); }
+    #scores { display:flex; flex-wrap:wrap; justify-content:center; gap:0.5rem; margin-bottom:1rem; }
+    .score { background:var(--panel-bg); padding:0.4rem 0.8rem; border-radius:4px; display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; }
+    #board { display:grid; grid-template-columns:repeat(8,1fr); width:100%; max-width:400px; aspect-ratio:1; gap:2px; background:var(--panel-bg); padding:3px; border-radius:6px; }
+    .cell { background:var(--cell-bg); position:relative; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:4px; transition:transform 0.2s; }
     .cell:hover { transform:scale(1.05); }
     .cell.selected { outline:2px solid var(--accent); }
-    .cell.move-anim { animation:flash .4s ease-out; }
+    .cell.move-anim { animation:flash 0.4s ease-out; }
     @keyframes flash { from{background:var(--accent);} to{background:var(--cell-bg);} }
-    .trail { position:absolute; width:.6rem; height:.6rem; border-radius:50%; opacity:var(--trail-alpha); }
+    .trail { position:absolute; width:0.6rem; height:0.6rem; border-radius:50%; opacity:var(--trail-alpha); }
     .token { font-size:var(--token-size); line-height:1; z-index:1; }
-    input,button { font-size:.9rem; padding:4px 8px; border-radius:4px; border:none; }
-    button { margin-left:4px; cursor:pointer; background:var(--accent); color:#fff; }
+    input, button { font-size:0.9rem; padding:0.4rem 0.8rem; border-radius:4px; border:none; }
+    button { background:var(--accent); color:#fff; cursor:pointer; }
   </style>
 </head>
 <body>
   <h1>Ocupa Casillas Online</h1>
-  <div id="player-indicator">Asignando jugador…</div>
-  <div id="name-form" style="display:none;">
-    <input id="name-input" placeholder="Tu nombre" />
-    <button id="name-btn">Guardar nombre</button>
+
+  <div id="lobby">
+    <p>Esperando jugadores <span id="player-count">0</span>/4...</p>
+    <div id="presence"></div>
   </div>
-  <div id="status">Conectando…</div>
-  <div id="scores"></div>
-  <div id="board"></div>
+
+  <div id="game" style="display:none;">
+    <div id="player-indicator">Eres: Jugador ...</div>
+    <div id="name-form">
+      <input id="name-input" placeholder="Tu nombre" />
+      <button id="name-btn">Guardar nombre</button>
+    </div>
+    <div id="status">Conectando…</div>
+    <div id="scores"></div>
+    <div id="board"></div>
+  </div>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script>
-    // Persistir sesión
+    // Session persist
     let sessionId = localStorage.getItem('ocupaSession');
-    if (!sessionId) {
-      sessionId = crypto.randomUUID();
-      localStorage.setItem('ocupaSession', sessionId);
-    }
+    if (!sessionId) { sessionId = crypto.randomUUID(); localStorage.setItem('ocupaSession', sessionId); }
 
-    // Inicializar Firebase
-    firebase.initializeApp({
-      apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
-      authDomain: "juego-ocupacion.firebaseapp.com",
-      databaseURL: "https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "juego-ocupacion",
-      storageBucket: "juego-ocupacion.appspot.com",
-      messagingSenderId: "567270483949",
-      appId: "1:567270483949:web:7b5150bd422b5175a8e4"
-    });
+    // Firebase init
+    firebase.initializeApp({ apiKey:"AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY", authDomain:"juego-ocupacion.firebaseapp.com", databaseURL:"https://juego-ocupacion-default-rtdb.europe-west1.firebasedatabase.app", projectId:"juego-ocupacion", storageBucket:"juego-ocupacion.appspot.com", messagingSenderId:"567270483949", appId:"1:567270483949:web:7b5150bd422b5175a8e4" });
     const db = firebase.database();
     const gameRef = db.ref('games/partida1');
     const playersRef = gameRef.child('players');
     const namesRef = gameRef.child('names');
-    // Presence tracking
     const presenceRef = db.ref('presence/' + sessionId);
     presenceRef.set(true);
     presenceRef.onDisconnect().remove();
     const presenceListRef = db.ref('presence');
-    // Remove stale players when they disconnect
+
+    // Remove stale players on disconnect
     presenceListRef.on('value', snap => {
       const pres = snap.val() || {};
       playersRef.once('value').then(psnap => {
         const players = psnap.val() || {};
-        Object.entries(players).forEach(([i, id]) => {
-          if (!Object.values(pres).includes(id)) {
-            playersRef.child(i).remove();
-          }
+        Object.entries(players).forEach(([i,id]) => {
+          if (!Object.values(pres).includes(id)) playersRef.child(i).remove();
         });
       });
     });
@@ -92,140 +91,110 @@
     const SIZE = 8;
     let playerIndex = null, selected = null;
     const colors = ['#e74c3c','#2ecc71','#3498db','#f1c40f'];
+    let namesMap = {};
 
-    // Asignación automática por orden de llegada
-    playersRef.transaction(curr => {
-      curr = curr || {};
-      // Si ya asignado
-      for (const [i, id] of Object.entries(curr)) {
-        if (id === sessionId) { playerIndex = Number(i); return curr; }
+    // Load names map
+    namesRef.on('value', snap => { namesMap = snap.val() || {}; updatePresenceUI(); });
+
+    // Handle players and lobby
+    playersRef.on('value', snap => {
+      const players = snap.val() || {};
+      const count = Object.keys(players).length;
+      document.getElementById('player-count').textContent = count;
+      updatePresenceUI(players);
+      if (playerIndex === null) assignPlayer(players);
+      if (count < 4) {
+        document.getElementById('lobby').style.display = 'block';
+        document.getElementById('game').style.display = 'none';
+      } else {
+        document.getElementById('lobby').style.display = 'none';
+        document.getElementById('game').style.display = 'block';
       }
-      // Asignar siguiente libre
-      if (Object.keys(curr).length < 4) {
-        const next = Object.keys(curr).reduce((max, k) => Math.max(max, Number(k)), -1) + 1;
-        playerIndex = next;
-        curr[next] = sessionId;
-      }
-      return curr;
-    }, () => {
-      document.getElementById('player-indicator').textContent = `Eres: Jugador ${playerIndex+1}`;
-      document.getElementById('name-form').style.display = 'block';
-      namesRef.child(playerIndex).once('value').then(snap => {
-        if (snap.val()) document.getElementById('name-input').value = snap.val();
-      });
-      initGame();
     });
+
+    function updatePresenceUI(players = {}) {
+      const el = document.getElementById('presence'); el.innerHTML = '';
+      Object.entries(players).forEach(([i,id]) => {
+        const div = document.createElement('div'); div.className = 'presence';
+        const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = colors[i];
+        const txt = namesMap[i] || `Jugador ${Number(i)+1}`;
+        div.append(dot, txt); el.append(div);
+      });
+    }
+
+    function assignPlayer(players) {
+      for (const [i,id] of Object.entries(players)) {
+        if (id === sessionId) { playerIndex = Number(i); break; }
+      }
+      if (playerIndex === null && Object.keys(players).length < 4) {
+        const next = Object.keys(players).reduce((m,k) => Math.max(m, Number(k)), -1) + 1;
+        playerIndex = next; playersRef.child(next).set(sessionId);
+      }
+      if (playerIndex !== null) {
+        document.getElementById('player-indicator').textContent = `Eres: Jugador ${playerIndex+1}`;
+        document.getElementById('name-form').style.display = 'flex';
+        namesRef.child(playerIndex).once('value').then(snap => {
+          if (snap.val()) document.getElementById('name-input').value = snap.val();
+        });
+      }
+    }
 
     document.getElementById('name-btn').onclick = () => {
       const name = document.getElementById('name-input').value.trim() || `Jugador ${playerIndex+1}`;
       namesRef.child(playerIndex).set(name);
     };
 
-    // Audio con envolvente
+    // Audio
     const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
     function playTone(freq) {
       const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
       osc.connect(gain); gain.connect(audioCtx.destination);
-      gain.gain.setValueAtTime(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sound-vol')), audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
-      osc.frequency.value = freq; osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+      gain.gain.setValueAtTime(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sound-vol')),audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.2);
+      osc.frequency.value=freq; osc.start(); osc.stop(audioCtx.currentTime+0.2);
     }
-    function hexFade(hex,a){ const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16); return `rgba(${r},${g},${b},${a})`; }
+    function hexFade(hex,a){ const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16); return `rgba(${r},${g},${b},${a})`; }
     function varGet(n){ return parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n)); }
 
     function initGame() {
-      // Construir tablero
+      // Build board
       const boardEl = document.getElementById('board'); boardEl.innerHTML = '';
       for (let r=0; r<SIZE; r++) for (let c=0; c<SIZE; c++) {
-        const cell = document.createElement('div'); cell.className = 'cell';
-        cell.dataset.coord = `${r},${c}`; cell.onclick = () => handleClick(cell);
-        boardEl.appendChild(cell);
+        const cell = document.createElement('div'); cell.className='cell';
+        cell.dataset.coord=`${r},${c}`; cell.onclick=()=>handleClick(cell);
+        boardEl.append(cell);
       }
-      // Inicializar partida sin borrar players/names
+      // Setup game state
       gameRef.child('turn').once('value').then(snap => {
         if (!snap.exists()) {
-          gameRef.update({
-            turn: 0,
-            pieces: {'0,0':0,'7,7':1,'0,7':2,'7,0':3},
-            trails: {}
-          });
+          gameRef.update({ turn:0, pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3}, trails:{} });
         }
       });
-      // Conexión
-      db.ref('.info/connected').on('value', snap => updateStatus(snap.val() ? 'Conectado' : 'Sin conexión', snap.val() ? colors[playerIndex] : '#e74c3c'));
-      // Escuchar juego
+      db.ref('.info/connected').on('value', snap => updateStatus(snap.val()?'Conectado':'Sin conexión', snap.val()?colors[playerIndex]:'#e74c3c'));
       gameRef.on('value', snap => { if (snap.val()) updateUI(snap.val()); });
     }
-
-    function updateStatus(text,bg){ const st=document.getElementById('status'); st.textContent=text; if(bg) st.style.backgroundColor=bg; }
-
+    function updateStatus(text,bg){ const st=document.getElementById('status'); st.textContent=text; if(bg)st.style.backgroundColor=bg; }
     function updateUI(g) {
-      const turn = g.turn || 0;
+      const turn=g.turn||0;
       namesRef.child(turn).once('value').then(snap => updateStatus(`Turno: ${snap.val()||`Jugador ${turn+1}`}`, colors[turn]));
       const counts=[0,0,0,0]; Object.values(g.trails||{}).forEach(p=>counts[p]++);
-      namesRef.once('value').then(nsnap => {
-        const names = nsnap.val()||{};
-        document.getElementById('scores').innerHTML = counts.map((v,i) =>
-          `<div class="score"><div class="dot" style="background:${colors[i]}"></div>${names[i]||`J${i+1}`}: ${v}</div>`
-        ).join('');
+      namesRef.once('value').then(nsnap=>{
+        const names=nsnap.val()||{};
+        document.getElementById('scores').innerHTML = counts.map((v,i)=>`<div class="score"><div class="dot" style="background:${colors[i]}"></div>${names[i]||`J${i+1}`}: ${v}</div>`).join('');
       });
-      document.querySelectorAll('.cell').forEach(cell => {
-        const coord = cell.dataset.coord;
-        cell.innerHTML = ''; cell.classList.remove('selected','move-anim');
-        if (g.trails?.[coord]!=null) cell.style.backgroundColor = hexFade(colors[g.trails[coord]], varGet('--trail-alpha'));
-        else cell.style.backgroundColor='var(--cell-bg)';
-        if (g.pieces?.[coord]!=null) {
-          const p=g.pieces[coord]; const t=document.createElement('span');
-          t.className='token'; t.textContent='♟'; t.style.color=colors[p]; cell.append(t);
-        }
+      document.querySelectorAll('.cell').forEach(cell=>{
+        const coord=cell.dataset.coord;
+        cell.innerHTML=''; cell.classList.remove('selected','move-anim');
+        if (g.trails?.[coord]!=null) cell.style.backgroundColor=hexFade(colors[g.trails[coord]],varGet('--trail-alpha')); else cell.style.backgroundColor='var(--cell-bg)';
+        if (g.pieces?.[coord]!=null){const p=g.pieces[coord];const t=document.createElement('span');t.className='token';t.textContent='♟';t.style.color=colors[p];cell.append(t);}
       });
       const alive=new Set(Object.values(g.pieces)); if(alive.size<=1){
-        const tc=[0,0,0,0]; Object.values(g.trails||{}).forEach(p=>tc[p]++);
-        const w=tc.indexOf(Math.max(...tc)); setTimeout(()=>{
-          namesRef.child(w).once('value').then(snap=>{ alert(`¡Gana ${snap.val()||`Jugador ${w+1}`}!`); });
-          gameRef.update({ turn:0, pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3}, trails:{} });
-        },200);
+        const tc=[0,0,0,0];Object.values(g.trails||{}).forEach(p=>tc[p]++);
+        const w=tc.indexOf(Math.max(...tc));setTimeout(()=>{namesRef.child(w).once('value').then(snap=>alert(`¡Gana ${snap.val()||`Jugador ${w+1}`}!`));gameRef.update({turn:0,pieces:{'0,0':0,'7,7':1,'0,7':2,'7,0':3},trails:{}});},200);
       }
     }
-
-    function handleClick(cell) {
-      if (playerIndex===null) return;
-      gameRef.once('value').then(snap=>{
-        const g=snap.val(); if(g.turn!==playerIndex) return;
-        const src=cell.dataset.coord;
-        if(!selected){ if(g.pieces?.[src]===playerIndex){ selected=src; cell.classList.add('selected'); }}
-        else { attemptMove(selected,src); selected=null; }
-      });
-    }
-
-    function attemptMove(src,dest){
-      gameRef.transaction(g=>{
-        if(!g) return;
-        const turn=g.turn||0;
-        if(g.pieces[src]!==turn) return;
-        const [sr,sc]=src.split(',').map(Number), [dr,dc]=dest.split(',').map(Number);
-        const ddr=Math.abs(dr-sr), ddc=Math.abs(dc-sc);
-        if(!(ddr<=1&&ddc<=1&&(ddr+ddc>0))) return;
-        g.trails=g.trails||{}; g.trails[src]=turn;
-        if(g.pieces[dest]!=null&&g.pieces[dest]!=turn) delete g.pieces[dest];
-        delete g.pieces[src]; g.pieces[dest]=turn;
-        Object.entries({...g.pieces}).forEach(([c,p])=>{
-          let trapped=true; const [r,cc]=c.split(',').map(Number);
-          outer: for(let dy=-1;dy<=1;dy++){for(let dx=-1;dx<=1;dx++){if(dx===0&&dy===0)continue;const nr=r+dy,nc=cc+dx,key=`${nr},${nc}`;if(nr<0||nc<0||nr>=SIZE||nc>=SIZE){trapped=false;break outer;}if(!(g.pieces[key]||g.trails[key])){trapped=false;break outer;}}}
-          if(trapped) delete g.pieces[c];
-        });
-        let next=(turn+1)%4; const aliveSet=new Set(Object.values(g.pieces));
-        while(!aliveSet.has(next)&&aliveSet.size>1) next=(next+1)%4;
-        g.turn=next; g._moved=dest; return g;
-      },(err,comm,snap)=>{
-        if(err) console.error(err);
-        if(comm&&snap.val()?._moved){
-          playTone(220+playerIndex*110);
-          document.querySelector(`[data-coord='${snap.val()._moved}']`)?.classList.add('move-anim');
-          gameRef.child('_moved').remove();
-        }
-      });
-    }
+    function handleClick(cell){ if(playerIndex===null)return; gameRef.once('value').then(snap=>{const g=snap.val();if(g.turn!==playerIndex)return;const src=cell.dataset.coord;if(!selected){if(g.pieces?.[src]===playerIndex){selected=src;cell.classList.add('selected');}}else{attemptMove(selected,src);selected=null;}}); }
+    function attemptMove(src,dest){gameRef.transaction(g=>{if(!g)return;const turn=g.turn||0;if(g.pieces[src]!==turn)return;const [sr,sc]=src.split(',').map(Number),[dr,dc]=dest.split(',').map(Number);const ddr=Math.abs(dr-sr),ddc=Math.abs(dc-sc);if(!(ddr<=1&&ddc<=1&&(ddr+ddc>0)))return;g.trails=g.trails||{};g.trails[src]=turn;if(g.pieces[dest]!=null&&g.pieces[dest]!=turn)delete g.pieces[dest];delete g.pieces[src];g.pieces[dest]=turn;Object.entries({...g.pieces}).forEach(([c,p])=>{let trapped=true;const [r,cc]=c.split(',').map(Number);outer:for(let dy=-1;dy<=1;dy++){for(let dx=-1;dx<=1;dx++){if(dx===0&&dy===0)continue;const nr=r+dy,nc=cc+dx,key=`${nr},${nc}`;if(nr<0||nc<0||nr>=SIZE||nc>=SIZE){trapped=false;break outer;}if(!(g.pieces[key]||g.trails[key])){trapped=false;break outer;}}}if(trapped)delete g.pieces[c];});let next=(turn+1)%4;const aliveSet=new Set(Object.values(g.pieces));while(!aliveSet.has(next)&&aliveSet.size>1)next=(next+1)%4;g.turn=next;g._moved=dest;return g;},(err,comm,snap)=>{if(err)console.error(err);if(comm&&snap.val()?._moved){playTone(220+playerIndex*110);document.querySelector(`[data-coord='${snap.val()._moved}']`)?.classList.add('move-anim');gameRef.child('_moved').remove();}});}  
   </script>
 </body>
 </html>
