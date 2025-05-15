@@ -8,8 +8,7 @@
     :root {
       --bg-page: #1f2a38;
       --panel-bg: #2e3b4e;
-      --cell-light: #e0e4e8;
-      --cell-dark: #c5ccd3;
+      --cell-bg: #e0e4e8;  /* Todas las casillas blancas */
       --accent: #f39c12;
       --font: 'Segoe UI', Tahoma, sans-serif;
       --token-size: 1.5rem;
@@ -38,9 +37,7 @@
       display: flex; align-items: center; gap: 6px;
       font-size: 0.9rem;
     }
-    .dot {
-      width: 12px; height: 12px; border-radius: 50%;
-    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
     #board {
       display: grid;
       grid-template: repeat(8, 50px) / repeat(8, 50px);
@@ -49,18 +46,17 @@
       padding: 4px; border-radius: 6px;
     }
     .cell {
-      background: var(--cell-light);
+      background: var(--cell-bg);
       position: relative; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       border-radius: 4px; transition: transform 0.2s;
     }
-    .cell.dark { background: var(--cell-dark); }
     .cell:hover { transform: scale(1.05); }
     .cell.selected { outline: 2px solid var(--accent); }
     .cell.move-anim { animation: highlight 0.4s ease-out; }
     @keyframes highlight {
       from { background: var(--accent); }
-      to   { background: var(--cell-light); }
+      to   { background: var(--cell-bg); }
     }
     .trail {
       position: absolute; width: var(--trail-size);
@@ -111,7 +107,7 @@
     for (let r=0;r<SIZE;r++){
       for (let c=0;c<SIZE;c++){
         const cell=document.createElement('div');
-        cell.className='cell '+((r+c)%2?'dark':'');
+        cell.className='cell';
         cell.dataset.coord=`${r},${c}`;
         cell.onclick=()=>handleClick(cell);
         boardEl.appendChild(cell);
@@ -146,23 +142,19 @@
 
       const counts=[0,0,0,0];
       Object.values(g.trails||{}).forEach(p=>counts[p]++);
-      document.getElementById('scores').innerHTML=counts.map((v,i)=>
+      document.getElementById('scores').innerHTML=counts.map((v,i)=
         `<div class="score"><div class="dot" style="background:${colors[i]}"></div>J${i+1}: ${v}</div>`
       ).join('');
 
       document.querySelectorAll('.cell').forEach(cell=>{
-        const coord=cell.dataset.coord.split(',');
-        const idx=coord.reduce((a,v,i)=>a+v*(i?8:1),0)%2;
-        cell.className='cell '+(idx?'dark':'');
         cell.innerHTML=''; cell.classList.remove('selected','move-anim');
-        if(g.trails?.[cell.dataset.coord]!=null){
-          const p=g.trails[cell.dataset.coord];
-          cell.classList.add(`trail-${p}`);
+        const coord=cell.dataset.coord;
+        if(g.trails?.[coord]!=null){
+          const p=g.trails[coord];
           const dot=document.createElement('div'); dot.className='trail'; dot.style.backgroundColor=colors[p]; cell.append(dot);
         }
-        if(g.pieces?.[cell.dataset.coord]!=null){
-          const p=g.pieces[cell.dataset.coord];
-          cell.classList.add(`token-${p}`);
+        if(g.pieces?.[coord]!=null){
+          const p=g.pieces[coord];
           const t=document.createElement('span'); t.className='token'; t.textContent='♟'; t.style.color=colors[p]; cell.append(t);
         }
       });
@@ -212,7 +204,7 @@
         let next=(turn+1)%4, alive=new Set(Object.values(g.pieces));
         while(!alive.has(next)&&alive.size>1) next=(next+1)%4;
         g.turn=next; g._moved=dest; return g;
-      },(e,c,snap)=>{ if(c&&snap.val()?._moved){ const m=snap.val()._moved; const cell=document.querySelector(`[data-coord='${m}']`); if(cell) cell.classList.add('move-anim'); gameRef.child('_moved').remove(); }});
+      },(e,c,snap)=>{ if(c&&snap.val()?._moved){ const m=snap.val()._moved; const cell=document.querySelector(`[data-coord='${m}']`); if(cell) cell.classList.add('move-anim'); gameRef.child('_moved').remove(); } });
     }
   </script>
 </body>
