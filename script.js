@@ -1,4 +1,4 @@
-// Configura Firebase
+// Configurar Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCPcfbyxWNJr9DksBdmJrnZe4Fs3ZnINtY",
   authDomain: "juego-ocupacion.firebaseapp.com",
@@ -31,6 +31,18 @@ if (!sessionId) {
 }
 
 let namesMap = {};
+
+function playTone(freq) {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.2, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.5);
+}
 
 function initBoard() {
   boardEl.innerHTML = "";
@@ -66,20 +78,18 @@ function onCellClick(cell) {
 
     if ((dx + dy !== 1 && !(dx === 1 && dy === 1)) || pieces[coord]) return;
 
+    playTone(300 + playerIndex * 100);
+
     // Ejecutar movimiento
     gameRef.transaction(g => {
       if (!g) return;
       g.pieces = g.pieces || {};
       g.trails = g.trails || {};
 
-      // Añadir traza en la celda anterior
       g.trails[fromCoord] = playerIndex;
-
-      // Mover pieza
       delete g.pieces[fromCoord];
       g.pieces[coord] = playerIndex;
 
-      // Cambiar turno
       let next = (g.turn + 1) % 4;
       const vivos = new Set(Object.values(g.pieces));
       while (!vivos.has(next) && vivos.size > 1) {
@@ -87,7 +97,6 @@ function onCellClick(cell) {
       }
       g.turn = next;
 
-      // Verificar si el tablero está lleno
       const total = Object.keys(g.trails).length + Object.keys(g.pieces).length;
       if (total >= SIZE * SIZE) {
         const count = [0, 0, 0, 0];
@@ -131,11 +140,11 @@ function updateUI(g) {
     cell.className = "cell";
 
     if (trails[coord] != null) {
-      const dot = document.createElement("div");
-      dot.className = "trail";
-      dot.style.background = playerColor(trails[coord]);
-      cell.appendChild(dot);
+      cell.style.background = playerColor(trails[coord]) + "33";
+    } else {
+      cell.style.background = "white";
     }
+
     if (pieces[coord] != null) {
       const icon = document.createElement("span");
       icon.className = "token";
@@ -204,7 +213,7 @@ function assignPlayer() {
   });
 }
 
-// Listeners globales
+// Listeners
 gameRef.on("value", snap => {
   const g = snap.val();
   if (!g) return;
