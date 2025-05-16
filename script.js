@@ -123,6 +123,7 @@ function onCellClick(cell) {
           });
         }, 200);
       }
+      g.lastMove = Date.now();
 
       return g;
     });
@@ -223,6 +224,31 @@ gameRef.on("value", snap => {
 namesRef.on("value", snap => {
   namesMap = snap.val() || {};
 });
+// Verificación AFK: reiniciar si han pasado 10 minutos sin movimientos
+setInterval(() => {
+  gameRef.child("lastMove").once("value").then(snap => {
+    const last = snap.val();
+    if (!last || playerIndex !== 0) return;
+
+    const now = Date.now();
+    const TEN_MINUTES = 10 * 60 * 1000;
+    if (now - last > TEN_MINUTES) {
+      gameRef.set({
+        turn: 0,
+        players: {},
+        names: {},
+        pieces: {
+          "0,0": 0,
+          "0,7": 1,
+          "7,0": 2,
+          "7,7": 3
+        },
+        trails: {},
+        lastMove: Date.now()
+      });
+    }
+  });
+}, 10000); // comprueba cada 10 segundos
 
 // Iniciar
 initBoard();
