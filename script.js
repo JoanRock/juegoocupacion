@@ -231,8 +231,8 @@ setInterval(() => {
     if (!last || playerIndex !== 0) return;
 
     const now = Date.now();
-    const TEN_MINUTES = 10 * 60 * 1000;
-    if (now - last > TEN_MINUTES) {
+    const HALF_HOUR = 10 * 60 * 1000;
+    if (now - last > HALF_HOUR) {
       gameRef.set({
         turn: 0,
         players: {},
